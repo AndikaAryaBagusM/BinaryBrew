@@ -32,10 +32,12 @@ The specification lives in [`docs/`](docs/README.md). Work follows the task list
 
    The server refuses to start while a variable is missing or invalid, and names the variable.
 
-3. Start PostgreSQL 16 in Docker (Docker Desktop must be running) and the app:
+3. Start PostgreSQL 16 in Docker (Docker Desktop must be running), apply the migrations,
+   and start the app:
 
    ```bash
    npm run db:up
+   npm run db:migrate
    npm run dev
    ```
 
@@ -43,6 +45,21 @@ Open <http://localhost:3000>. <http://localhost:3000/api/health> returns `ok` wh
 database answers and `503` when it does not.
 
 The first `db:up` also creates the `binarybrew_test` database used by integration tests.
+Integration tests reset and migrate that database on every run; they never touch `binarybrew`.
+
+## Database changes
+
+Tables, columns, enums, keys and plain indexes live in `src/db/schema.ts`. Check constraints,
+partial indexes, functions, triggers and views live in hand-written SQL migrations
+(docs/05 §3). Migrations in `src/db/migrations/` are forward-only: never edit one after it is
+merged, and never use `drizzle-kit push`.
+
+- Schema change: edit `schema.ts`, run `npm run db:generate -- --name=<what_changed>`, review
+  the generated SQL, then `npm run db:migrate`.
+- SQL-only change: `npx drizzle-kit generate --custom --name=<what_changed>`, write the SQL,
+  separating statements with `--> statement-breakpoint`.
+- Update docs/05 in the same change: `tests/db/schema.test.ts` builds a database from the
+  docs/05 §3 DDL and fails if the migrated database differs from it.
 
 Install scripts from dependencies are blocked by npm unless listed under `allowScripts` in
 `package.json`. Review a package's script before allowing it.
@@ -53,6 +70,8 @@ Install scripts from dependencies are blocked by npm unless listed under `allowS
 | --------------------------------- | -------------------------------------------------------------------------- |
 | `npm run dev`                     | Start the dev server                                                       |
 | `npm run db:up`                   | Start PostgreSQL in Docker and wait until it is healthy                    |
+| `npm run db:migrate`              | Apply pending migrations to `DATABASE_URL`                                 |
+| `npm run db:generate`             | Generate a migration from changes in `src/db/schema.ts`                    |
 | `npm run build` / `npm start`     | Production build and server                                                |
 | `npm run typecheck`               | Generate route types, then `tsc --noEmit`                                  |
 | `npm run lint`                    | ESLint                                                                     |

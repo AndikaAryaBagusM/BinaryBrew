@@ -16,6 +16,8 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "db:up": "docker compose up -d --wait db",
+    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "drizzle-kit generate",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "prepare": "husky"
   },
@@ -27,6 +29,7 @@
     "*.{json,css,md,yml,yaml}": "prettier --write"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.4",
     "next": "16.4.2",
     "postgres": "^3.4.9",
     "react": "19.3.0",
@@ -38,6 +41,7 @@
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "eslint-config-prettier": "^10.1.8",
@@ -49,6 +53,7 @@
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "unrs-resolver": false
+    "unrs-resolver": false,
+    "esbuild": false
   }
 }
