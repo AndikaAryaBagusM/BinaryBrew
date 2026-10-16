@@ -1,0 +1,9 @@
+package-lock.json
+.next/
+coverage/
+# Hand-written spec documents and vendored skills keep their own formatting
+docs/
+CLAUDE.md
+AGENTS.md
+.claude/
+.impeccable/
