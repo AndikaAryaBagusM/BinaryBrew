@@ -9,5 +9,13 @@ Read docs/ before any task: 01 PRD, 02 tech, 03 app flow, 04 design brief,
 - No customer personal data (D19). UI text is Indonesian: "kamu" for customers, "Anda" for the owner.
 - Design source: Figma file z0JS6kZeYkF6h1aB6BUDnT. Use tokens, not hard-coded colours.
 
+## Skill notes
+- PostgreSQL 16: no PG17/18 features (e.g. `uuidv7()`); ids use `gen_random_uuid()`. Never `drizzle-kit push`; forward-only migration files only.
+- Client fetching uses TanStack Query, not SWR. No cross-request caches for prices, stock or availability. Ask before adding a dependency a skill suggests (e.g. `better-all`, `lru-cache`).
+- Accessibility target is WCAG 2.1 AA (doc 04 §10). The 3-minute auto-lock and payment countdown are intentional time limits.
+- Security reviews include staff- and owner-only routes (privilege escalation, missing elevation).
+
 ## Commands
 (fill in: install, dev, test, db:migrate, lint)
+
+@AGENTS.md
