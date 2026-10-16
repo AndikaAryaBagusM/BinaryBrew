@@ -5,7 +5,23 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
-    include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
     passWithNoTests: true,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["tests/unit/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "integration",
+          include: ["tests/integration/**/*.test.ts"],
+          setupFiles: ["tests/integration/setup.ts"],
+        },
+      },
+    ],
   },
 });
