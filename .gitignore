@@ -1,0 +1,43 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+
+# env files: only the example is committed
+.env*
+!.env.example
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# python (Apriori job)
+__pycache__/
+.venv/
+
+# per-developer Claude Code and Impeccable settings
+.claude/settings.local.json
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+
+# Impeccable engine binary (19 MB); the launcher fetches the checksum-verified release when missing
+.claude/skills/impeccable/scripts/bin/
