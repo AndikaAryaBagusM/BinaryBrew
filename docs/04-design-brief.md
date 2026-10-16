@@ -96,9 +96,24 @@ Contrast ratios were calculated against WCAG 2.1 (AA needs 4.5:1 for normal text
 | `success` | `#2F6B3E` | Success buttons | white on `success` 6.4:1 |
 | `info` | `#2D6AA8` | Neutral information | text on `surface` 5.6:1, on `bg` 5.0:1; white on `info` 5.6:1 |
 
-Status chips (background / text): **Waiting** `#FBEBC9` / `#7A5200` (5.9:1) · **Preparing** `#FDEBD8` / `#8F4A1C` (5.7:1) · **Ready** `#DCEEDD` / `#24562F` (7.1:1). Never rely on colour alone: every chip has a text label and an icon.
+Supporting tokens from the Figma file (adopted in P0-05; ratios calculated the same way):
 
-Queue board (dark theme): background `#1E1510`; text `#F7F1E8` (16.0:1); Preparing numbers `#E8B75E` (9.7:1); Ready numbers `#7FD18B` (9.7:1); secondary text `#A8937E` (6.1:1).
+| Token | Hex | Use | Pair and ratio |
+|---|---|---|---|
+| `surface-sunken` | `#F0E8DC` | Pressed secondary button, wells, completed chip | `ink` 11.2:1, `ink-muted` 5.7:1 |
+| `border-strong` | `#8C7A6B` | Secondary button border, empty PIN dots, input borders | UI shape on `surface` 4.1:1, on `bg` 3.7:1 |
+| `brand-pressed` | `#4A2F21` | Pressed primary button | white 12.2:1 |
+| `brand-dark` | `#3F271B` | Dark wordmark, deep brand surfaces | white 13.8:1 |
+| `on-brand` | `#FFFFFF` | Text and icons on `brand`, `danger`, `success` | see those rows |
+| `accent-soft` | `#FBF1DC` | Pressed ghost button, pressed PIN key, selected rows | `ink` 12.2:1 |
+| `danger-pressed` | `#962E24` | Pressed destructive button | white 7.7:1 |
+| `danger-soft` | `#F6DEDA` | Danger alert background | `danger` 4.7:1 |
+| `success-soft` | `#DCEEDD` | Success alert background | `success` 5.3:1 |
+| `info-soft` | `#DCE8F5` | Info alert background, "Baru" (paid) chip | `info` 4.5:1 |
+
+Status chips (background / text): **Waiting** `#FBEBC9` / `#7A5200` (5.9:1) · **Paid ("Baru")** `info-soft` / `info` (4.5:1) · **Preparing** `#FDEBD8` / `#8F4A1C` (5.7:1) · **Ready** `#DCEEDD` / `#24562F` (7.1:1) · **Completed** `surface-sunken` / `ink-muted` (5.7:1) · **Expired** `#ECE6DD` / `#5C4B3D` (6.7:1) · **Voided** `#F6DEDA` / `#8E2A20` (6.6:1). Never rely on colour alone: every chip has a text label and an icon.
+
+Queue board (dark theme): background `#1E1510`; text `#F7F1E8` (16.0:1); Preparing numbers `#E8B75E` (9.7:1); Ready numbers `#7FD18B` (9.7:1); secondary text `#A8937E` (6.1:1). Tiles: Preparing `#2A1F18` (text 14.3:1, numbers 8.7:1, secondary text 5.5:1), Ready `#1F3324` (numbers 7.3:1).
 
 Dark mode for customer and owner screens is optional (Phase 3); the Counter and the board each have a single fixed theme.
 
@@ -118,12 +133,19 @@ Dark mode for customer and owner screens is optional (Phase 3); the Counter and 
 | Body | 16 px / 400 | Default (never below 16 px on customer inputs, to prevent iOS zoom) |
 | Caption | 13 px / 400 | Metadata, never for critical information |
 | Counter body | 18 px / 500 | Tablet text |
+| Display M | 40 px / 800 | Secondary large numbers (Figma) |
+| Button label | 16 px / 600; Counter 18 px / 600 | Button text |
+| Counter title | 22 px / 700 | Counter section titles, menu tiles |
+| Counter number | 32 px / 800 | Queue numbers on order cards, PIN keys |
+| Owner body | 14 px / 400 | Owner tables (laptop); customer screens stay at 16 px |
+
+Figma uses Roboto as a stand-in for the system stack; code uses the system stack.
 
 ### 4.4 Shape, spacing, depth
 
 - 4 px spacing grid (4, 8, 12, 16, 24, 32, 48).
-- Radii: 8 (inputs, chips), 12 (cards), 20 (sheets), 999 (pills).
-- One elevation for cards (subtle), one for sheets and dialogs; no heavy shadows.
+- Radii: 8 (inputs), 12 (cards, buttons), 16 (PIN keys, large tiles), 20 (sheets), 999 (pills, chips).
+- One elevation for cards (subtle), one for sheets, one for dialogs; no heavy shadows. Card `0 1px 2px` + `0 2px 8px` at 6 % `ink`; sheet `0 -4px 24px` at 14 % `ink`; dialog `0 12px 32px` at 18 % + `0 2px 6px` at 8 % `ink`.
 - Icons: Lucide (outline, 2 px stroke), 24 px default; never icon-only buttons without a label on the Counter.
 
 ### 4.5 Imagery
@@ -141,7 +163,7 @@ Menu photos optional per item. When missing, show a coloured tile with the first
 | Modifier group | Radio list (max 1) or checkbox list (max > 1); shows "Wajib pilih" when min ≥ 1; price delta on the right |
 | Bottom sheet | Drag handle, title, content, sticky action bar |
 | Cart bar | Sticky bottom bar with item count and total |
-| Status chip | Waiting, Preparing, Ready, Expired, Voided |
+| Status chip | Waiting, Paid ("Baru"), Preparing, Ready, Completed, Expired, Voided; sizes S and L |
 | Order card (Counter) | New (highlight pulse for 5 s), preparing, ready; shows number, items, age in minutes, one primary action |
 | Queue number tile (board) | Preparing and Ready variants |
 | PIN pad | 3×4 keys, 72 px, dots display, error shake, lockout message |
@@ -319,6 +341,18 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `board.empty` | Belum ada pesanan |
 | `owner.lowStock` | Stok menipis |
 | `owner.noRecipe` | Resep belum ada |
+| `chip.awaiting` | Menunggu bayar |
+| `chip.paid` | Baru |
+| `chip.preparing` | Disiapkan |
+| `chip.ready` | Siap diambil |
+| `chip.completed` | Selesai |
+| `chip.expired` | Kedaluwarsa |
+| `chip.voided` | Dibatalkan |
+| `pin.delete` | Hapus |
+| `pin.keypad` | Papan PIN |
+| `pin.progress` | {entered} dari {total} digit |
+| `common.close` | Tutup |
+| `common.loading` | Memuat… |
 
 Money format: `Rp 22.000`. Time: 24-hour (`18.30`). Dates: `8 Okt 2026`.
 
