@@ -1,1 +1,167 @@
 @import "tailwindcss";
+
+/* Design tokens from docs/04 §4 and the Figma file z0JS6kZeYkF6h1aB6BUDnT.
+   Tailwind's default palette is removed so only these colours exist:
+   a hard-coded colour such as bg-red-500 does not compile into anything. */
+@theme {
+  --color-*: initial;
+
+  /* Base (docs/04 §4.2) */
+  --color-bg: #f7f1e8;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f0e8dc;
+  --color-ink: #3b2a20;
+  --color-ink-muted: #6b5646;
+  --color-line: #e7dcc9;
+  --color-border-strong: #8c7a6b;
+
+  /* Brand */
+  --color-brand: #5b3a29;
+  --color-brand-pressed: #4a2f21;
+  --color-brand-dark: #3f271b;
+  --color-on-brand: #ffffff;
+  --color-accent: #e8b75e;
+  --color-accent-soft: #fbf1dc;
+  --color-caramel: #c98a3e; /* decorative only: 2.9:1 on white, never text */
+  --color-price: #8a5a1f;
+
+  /* Feedback */
+  --color-danger: #b3382c;
+  --color-danger-pressed: #962e24;
+  --color-danger-soft: #f6deda;
+  --color-success: #2f6b3e;
+  --color-success-soft: #dceedd;
+  --color-info: #2d6aa8;
+  --color-info-soft: #dce8f5;
+
+  /* Order status chips (background / text) */
+  --color-status-waiting-bg: #fbebc9;
+  --color-status-waiting-fg: #7a5200;
+  --color-status-preparing-bg: #fdebd8;
+  --color-status-preparing-fg: #8f4a1c;
+  --color-status-ready-bg: #dceedd;
+  --color-status-ready-fg: #24562f;
+  --color-status-expired-bg: #ece6dd;
+  --color-status-expired-fg: #5c4b3d;
+  --color-status-voided-bg: #f6deda;
+  --color-status-voided-fg: #8e2a20;
+
+  /* Queue board (fixed dark theme) */
+  --color-board-bg: #1e1510;
+  --color-board-tile: #2a1f18;
+  --color-board-ready-tile: #1f3324;
+  --color-board-text: #f7f1e8;
+  --color-board-text-muted: #a8937e;
+  --color-board-preparing: #e8b75e;
+  --color-board-ready: #7fd18b;
+
+  /* Type (docs/04 §4.3): system UI stack, no web-font download */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans",
+    system-ui, sans-serif;
+
+  --text-display: clamp(3.5rem, 12vw, 6rem); /* 56–96 px, order number */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -1px;
+  --text-display--font-weight: 800;
+  --text-display-m: 2.5rem; /* 40 px */
+  --text-display-m--line-height: 1.1;
+  --text-display-m--letter-spacing: -1px;
+  --text-display-m--font-weight: 800;
+  --text-board: clamp(10rem, 11.5vw, 13.75rem); /* 160–220 px, TV board */
+  --text-board--line-height: 1;
+  --text-board--font-weight: 800;
+  --text-h1: 1.5rem;
+  --text-h1--line-height: 1.33;
+  --text-h1--letter-spacing: -0.5px;
+  --text-h1--font-weight: 700;
+  --text-h2: 1.125rem;
+  --text-h2--line-height: 1.33;
+  --text-h2--font-weight: 700;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5;
+  --text-label: 1rem; /* button labels */
+  --text-label--line-height: 1.25;
+  --text-label--font-weight: 600;
+  --text-caption: 0.8125rem; /* 13 px; never for critical information */
+  --text-caption--line-height: 1.38;
+  --text-counter-body: 1.125rem;
+  --text-counter-body--line-height: 1.44;
+  --text-counter-body--font-weight: 500;
+  --text-counter-label: 1.125rem;
+  --text-counter-label--line-height: 1.22;
+  --text-counter-label--font-weight: 600;
+  --text-counter-title: 1.375rem;
+  --text-counter-title--line-height: 1.27;
+  --text-counter-title--font-weight: 700;
+  --text-counter-number: 2rem;
+  --text-counter-number--line-height: 1.1;
+  --text-counter-number--letter-spacing: -0.5px;
+  --text-counter-number--font-weight: 800;
+  --text-owner-body: 0.875rem;
+  --text-owner-body--line-height: 1.43;
+
+  /* Shape (docs/04 §4.4); spacing uses Tailwind's 4 px scale */
+  --radius-control: 8px; /* inputs */
+  --radius-card: 12px; /* cards, buttons */
+  --radius-key: 16px; /* PIN keys, large tiles */
+  --radius-sheet: 20px; /* sheets, dialogs */
+
+  /* Elevation: one for cards, one for sheets, one for dialogs */
+  --shadow-card: 0 1px 2px #3b2a200f, 0 2px 8px #3b2a200f;
+  --shadow-sheet: 0 -4px 24px #3b2a2024;
+  --shadow-dialog: 0 12px 32px #3b2a202e, 0 2px 6px #3b2a2014;
+
+  /* Motion (docs/04 §8): 150–200 ms ease-out; reduced motion swaps to fade */
+  --animate-sheet-in: sheet-in 200ms ease-out;
+  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-shake: shake 300ms ease-in-out;
+
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-8px);
+    }
+    40%,
+    80% {
+      transform: translateX(8px);
+    }
+  }
+}
+
+/* Visible focus (docs/04 §10): 3 px brand ring with an accent outline. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 3px solid var(--color-brand);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+}
