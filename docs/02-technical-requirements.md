@@ -106,7 +106,7 @@ volumes:
 | `TOKEN_HASH_PEPPER` | 32+ random bytes | Peppers session/device token hashes |
 | `PAYMENT_PROVIDER` | `mock` | `mock` or a real adapter name |
 | `PAYMENT_WEBHOOK_SECRET` | random | Signs/verifies webhook payloads |
-| `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN` | local only | Used by `db:seed` |
+| `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN`, `SEED_STAFF_PIN`, `SEED_COUNTER_DEVICE_TOKEN` | local only | Used by `db:seed`; the device token is the seeded counter tablet's cookie value (only its hash is stored) |
 | `TZ` | `Asia/Jakarta` | Process timezone |
 
 Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run reco:run`, `npm test`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
