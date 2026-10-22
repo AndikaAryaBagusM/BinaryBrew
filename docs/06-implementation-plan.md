@@ -86,7 +86,8 @@ Ask instead of inventing requirements. If a doc is ambiguous, propose a change t
 ### 3.3 Git workflow
 
 - `main` is always runnable. Branches: `feat/p1-06-order-creation`, `fix/…`, `docs/…`.
-- Pull request per task (even solo): the description lists the task ID, what changed, how it was tested, and the PR checklist below. Squash merge.
+- Pull request per task (even solo): the description lists the task ID, what changed, how it was tested, and the PR checklist below. Merge commit.
+- Every task branch starts from an up-to-date `main` and its PR targets `main`. Never stack PRs: GitHub merges a stacked PR into its parent branch, not into `main`.
 - PR checklist: tests added or updated · `npm run verify` green · no secrets · docs updated · migrations forward-only · UI strings in `id.json` · accessibility basics checked for UI changes.
 
 ## 4. Phase 0 — Foundation (≈ 2 days)
@@ -234,7 +235,7 @@ Keep this table up to date at the end of each session.
 
 | Phase | Tasks done | Notes |
 |---|---|---|
-| 0 | 6 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ |
+| 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
 | 1 | 0 / 17 | |
 | 2 | 0 / 8 | |
 | 3 | 0 / 8 | |
