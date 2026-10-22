@@ -21,6 +21,8 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts", "tests/db/**/*.test.ts"],
           globalSetup: ["tests/integration/global-setup.ts"],
           setupFiles: ["tests/integration/setup.ts"],
+          // The files share one test database; run them one at a time.
+          fileParallelism: false,
         },
       },
     ],
