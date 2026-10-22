@@ -2,7 +2,8 @@ name: binarybrew
 
 services:
   db:
-    image: postgres:16
+    # Exact version recorded in docs/versions.md
+    image: postgres:16.15
     environment:
       POSTGRES_USER: binarybrew
       POSTGRES_PASSWORD: binarybrew_dev

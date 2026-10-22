@@ -15,6 +15,8 @@ The specification lives in [`docs/`](docs/README.md). Work follows the task list
 | Docker Desktop | current, engine running          | P0-02 (PostgreSQL)  |
 | Python 3       | 3.11 or later                    | P1-15 (Apriori job) |
 
+Exact pinned versions of every tool and package are in [`docs/versions.md`](docs/versions.md).
+
 ## Setup
 
 1. Install dependencies. This also activates the Git pre-commit hook (Husky).
@@ -33,13 +35,15 @@ The specification lives in [`docs/`](docs/README.md). Work follows the task list
    The server refuses to start while a variable is missing or invalid, and names the variable.
 
 3. Start PostgreSQL 16 in Docker (Docker Desktop must be running), apply the migrations,
-   and start the app:
+   load the demo data, and start the app:
 
    ```bash
-   npm run db:up
-   npm run db:migrate
+   npm run db:setup
    npm run dev
    ```
+
+   `db:setup` runs `db:up`, `db:migrate` and `db:seed`. The seed is idempotent, so it is safe
+   to run again; it prints the QR links for "Pintu masuk" and "Meja 1"–"Meja 6".
 
 Open <http://localhost:3000>. <http://localhost:3000/api/health> returns `ok` when the
 database answers and `503` when it does not.
@@ -62,7 +66,9 @@ merged, and never use `drizzle-kit push`.
   docs/05 §3 DDL and fails if the migrated database differs from it.
 
 Install scripts from dependencies are blocked by npm unless listed under `allowScripts` in
-`package.json`. Review a package's script before allowing it.
+`package.json`. Review a package's script before allowing it. Dependencies are pinned to exact
+versions (`.npmrc` sets `save-exact`); see [`docs/versions.md`](docs/versions.md) before
+changing one.
 
 ## Scripts
 
@@ -72,6 +78,8 @@ Install scripts from dependencies are blocked by npm unless listed under `allowS
 | `npm run db:up`                   | Start PostgreSQL in Docker and wait until it is healthy                    |
 | `npm run db:migrate`              | Apply pending migrations to `DATABASE_URL`                                 |
 | `npm run db:generate`             | Generate a migration from changes in `src/db/schema.ts`                    |
+| `npm run db:seed`                 | Load settings, users, counter device, menu and QR tokens (idempotent)      |
+| `npm run db:setup`                | `db:up`, then `db:migrate`, then `db:seed`                                 |
 | `npm run build` / `npm start`     | Production build and server                                                |
 | `npm run typecheck`               | Generate route types, then `tsc --noEmit`                                  |
 | `npm run lint`                    | ESLint                                                                     |
