@@ -743,9 +743,9 @@ where ready_at is not null
 
 ## 7. Seed data
 
-`npm run db:seed` loads, in this order:
+`npm run db:seed` loads, in this order (it is idempotent: rows are matched by natural key, created only when missing, and existing rows are never changed):
 
-1. Settings (3.9), one owner user (email and PIN from `.env.seed`), two staff users, one counter device.
+1. Settings (3.9), one owner user (email, password and PIN from the `SEED_*` variables in `.env`), two staff users, one counter device.
 2. Categories, about 12 menu items, modifier groups (Ukuran, Gula, Es, Tambahan) and options.
 3. QR tokens: "Pintu masuk" and "Meja 1" to "Meja 6".
 4. (Phase 2) Ingredients, recipes, an opening stock movement for each ingredient.
