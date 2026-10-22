@@ -4,6 +4,9 @@ import { getEnv } from "@/lib/env";
 import * as schema from "./schema";
 
 export type Db = PostgresJsDatabase<typeof schema>;
+export type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+// Repos accept either, so a service can run them inside a caller's transaction.
+export type DbExecutor = Db | DbTransaction;
 
 // One pool per process. The dev server re-evaluates modules on reload, so the
 // pool is kept on globalThis there to avoid leaking connections.

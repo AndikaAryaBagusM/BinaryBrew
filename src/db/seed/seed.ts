@@ -1,11 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { Db } from "@/db/client";
+import type { Db, DbExecutor } from "@/db/client";
 import * as schema from "@/db/schema";
 import { newQrToken } from "@/lib/ids";
 import { hashSecret, hashToken } from "@/modules/auth/hashing";
 import * as data from "./data";
-
-export type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export type SeedInput = {
   ownerEmail: string;
@@ -33,7 +31,7 @@ export type SeedSummary = {
 // missing. Existing rows are never updated or removed, so re-running keeps
 // changes the owner made. One transaction, so a failure leaves nothing behind.
 export function seedDatabase(
-  db: Db | DbTransaction,
+  db: DbExecutor,
   input: SeedInput,
 ): Promise<SeedSummary> {
   return db.transaction(async (tx) => {
