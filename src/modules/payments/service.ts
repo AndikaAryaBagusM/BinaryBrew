@@ -16,7 +16,15 @@ import * as repo from "./repo";
 // QRIS payments (FR-PM-01..03, FR-PM-07, Schema §5.2). The browser never
 // marks anything paid: only a verified gateway event does.
 
+// One provider per process, built from the (cached) environment.
+let provider: PaymentProvider | undefined;
+
 export function getPaymentProvider(): PaymentProvider {
+  provider ??= createProvider();
+  return provider;
+}
+
+function createProvider(): PaymentProvider {
   const env = getEnv();
   switch (env.PAYMENT_PROVIDER) {
     case "mock":
