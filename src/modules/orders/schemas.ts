@@ -8,6 +8,12 @@ import { MAX_LINES } from "./pricing";
 // Random per-browser id and per-request key: URL-safe, 16 to 64 characters.
 export const clientToken = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
 
+// Counter status buttons (FR-QF-02): the next step only; the service checks
+// which one that is.
+export const statusChangeBody = z.strictObject({
+  status: z.enum(["preparing", "ready", "completed"]),
+});
+
 export const createOrderBody = z.strictObject({
   qrToken: z.string().min(1).max(64),
   clientSession: clientToken,

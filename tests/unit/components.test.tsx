@@ -81,16 +81,22 @@ describe("PinPad", () => {
     expect(markup).toContain("h-18 w-20");
   });
 
-  it("shows one dot per digit and announces progress", () => {
-    expect(markup.match(/data-dot=/g)).toHaveLength(4);
-    expect(markup).toContain("0 dari 4 digit");
-    expect(html(<PinPad length={6} onComplete={() => {}} />)).toContain(
-      "0 dari 6 digit",
-    );
+  it("shows a dot for each of the first 4 digits and announces progress", () => {
+    // PINs are 4–6 digits (PRD A4); the pad never shows a user's PIN length.
+    expect(markup.match(/data-dot="empty"/g)).toHaveLength(4);
+    expect(markup).toContain("0 digit dimasukkan");
+  });
+
+  it("has a Masuk key in the bottom-left slot, off until 4 digits", () => {
+    expect(markup).toMatch(/<button[^>]* disabled=""[^>]*>Masuk<\/button>/);
+    const keys = [...markup.matchAll(/aria-label="([^"]+)"/g)]
+      .map((m) => m[1])
+      .filter((label) => label !== "Papan PIN");
+    expect(keys).toEqual([..."123456789", "Masuk", "0", "Hapus"]);
   });
 
   it("disables every key while locked", () => {
     const locked = html(<PinPad disabled onComplete={() => {}} />);
-    expect(locked.match(/<button[^>]* disabled=""/g)).toHaveLength(11);
+    expect(locked.match(/<button[^>]* disabled=""/g)).toHaveLength(12);
   });
 });

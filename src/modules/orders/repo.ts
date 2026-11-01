@@ -168,15 +168,33 @@ export async function selectOrderLines(
   orderId: string,
   db: DbExecutor = getDb(),
 ) {
+  return (await selectLinesOfOrders([orderId], db)).get(orderId) ?? [];
+}
+
+type OrderLine = {
+  name: string;
+  quantity: number;
+  lineTotal: number;
+  options: string[];
+};
+
+// Lines of several orders in two queries, by order id.
+export async function selectLinesOfOrders(
+  orderIds: string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, OrderLine[]>> {
+  const lines = new Map<string, OrderLine[]>();
+  if (orderIds.length === 0) return lines;
   const items = await db
     .select({
       id: orderItems.id,
+      orderId: orderItems.orderId,
       name: orderItems.nameSnapshot,
       quantity: orderItems.quantity,
       lineTotal: orderItems.lineTotal,
     })
     .from(orderItems)
-    .where(eq(orderItems.orderId, orderId))
+    .where(inArray(orderItems.orderId, orderIds))
     .orderBy(asc(orderItems.position), asc(orderItems.id));
   const options =
     items.length === 0
@@ -197,10 +215,16 @@ export async function selectOrderLines(
             asc(orderItemModifiers.position),
             asc(orderItemModifiers.id),
           );
-  return items.map(({ id, ...item }) => ({
-    ...item,
-    options: options.filter((o) => o.orderItemId === id).map((o) => o.name),
-  }));
+  for (const { id, orderId, ...item } of items) {
+    const line = {
+      ...item,
+      options: options.filter((o) => o.orderItemId === id).map((o) => o.name),
+    };
+    const list = lines.get(orderId);
+    if (list) list.push(line);
+    else lines.set(orderId, [line]);
+  }
+  return lines;
 }
 
 export async function lockByPublicToken(publicToken: string, db: DbExecutor) {
@@ -260,4 +284,43 @@ export async function markReadyOrdersCompleted(
     .set({ status: "completed", completedAt: now, updatedAt: now })
     .where(and(eq(orders.status, "ready"), lte(orders.readyAt, readyBefore)))
     .returning({ id: orders.id, queueNumber: orders.queueNumber });
+}
+
+// The Counter queue (FR-QF-02): paid orders not yet collected, oldest
+// payment first.
+export async function selectCounterQueue(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: orders.id,
+      queueNumber: orders.queueNumber,
+      status: orders.status,
+      channel: orders.channel,
+      paidAt: orders.paidAt,
+      preparingAt: orders.preparingAt,
+      readyAt: orders.readyAt,
+    })
+    .from(orders)
+    .where(inArray(orders.status, ["paid", "preparing", "ready"]))
+    .orderBy(asc(orders.paidAt), asc(orders.id));
+}
+
+const stampColumn = {
+  preparing: "preparingAt",
+  ready: "readyAt",
+  completed: "completedAt",
+} as const;
+
+// The caller holds the order lock and has checked the step (Schema §5.3).
+export async function setOrderStatus(
+  id: string,
+  status: keyof typeof stampColumn,
+  now: Date,
+  db: DbExecutor,
+) {
+  const [row] = await db
+    .update(orders)
+    .set({ status, [stampColumn[status]]: now, updatedAt: now })
+    .where(eq(orders.id, id))
+    .returning({ queueNumber: orders.queueNumber });
+  return row!.queueNumber;
 }

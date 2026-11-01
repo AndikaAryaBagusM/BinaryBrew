@@ -135,7 +135,8 @@ function PinDemo() {
       />
       <StateLabel>
         Interactive: {DEMO_PIN} is accepted, anything else is wrong; 5 wrong
-        tries lock the pad. Keyboard digits and Backspace work.
+        tries lock the pad. PINs are 4–6 digits: Masuk or Enter submits from 4,
+        the 6th digit submits by itself. Keyboard digits and Backspace work.
         {accepted && " Accepted."}
       </StateLabel>
       {(accepted || locked) && (

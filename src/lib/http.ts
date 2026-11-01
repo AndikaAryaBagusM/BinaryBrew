@@ -43,6 +43,8 @@ function messageFor(error: AppError): string {
       return t("error.openOrderLimit", { n: Number(details.limit) });
     case "ITEM_SOLD_OUT":
       return t("error.itemSoldOut");
+    case "ORDER_STATUS_CHANGED":
+      return t("error.orderStatusChanged");
     default:
       return t("error.generic");
   }
@@ -90,11 +92,12 @@ export async function readJson<T>(
   return result.data;
 }
 
-// Wraps a handler so thrown errors become the standard error response.
-export function route(
-  handler: (request: NextRequest) => Promise<NextResponse>,
+// Wraps a handler so thrown errors become the standard error response. A
+// plain Response is allowed for streams (lib/sse.ts).
+export function route<R extends Response = NextResponse>(
+  handler: (request: NextRequest) => Promise<R>,
 ) {
-  return async (request: NextRequest) => {
+  return async (request: NextRequest): Promise<R | NextResponse> => {
     try {
       return await handler(request);
     } catch (error) {

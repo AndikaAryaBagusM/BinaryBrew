@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 import { e2eTestDatabaseUrl } from "./tests/integration/databases";
 
-// End-to-end tests (Tech §12): the customer pages on a phone viewport against
-// a dev server on its own port and its own database (global-setup.ts).
+// End-to-end tests (Tech §12): the customer pages on a phone viewport and
+// the Counter on a landscape tablet, against a dev server on its own port and its own database (global-setup.ts).
 // Stop your own `npm run dev` first: Next.js runs one dev server per project.
 if (existsSync(".env")) process.loadEnvFile(".env");
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -33,6 +33,16 @@ export default defineConfig({
         ...devices["Pixel 7"],
         channel: "chrome",
         viewport: { width: 360, height: 780 },
+      },
+      testIgnore: "counter.spec.ts",
+    },
+    {
+      name: "tablet",
+      testMatch: "counter.spec.ts",
+      use: {
+        channel: "chrome",
+        viewport: { width: 1280, height: 800 },
+        hasTouch: true,
       },
     },
   ],

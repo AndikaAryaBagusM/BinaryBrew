@@ -14,7 +14,8 @@ import {
 // Recreates the e2e database before every Playwright run: migrations, the
 // normal seed, then what the specs rely on (11 % inclusive tax, 5 % service
 // charge, and a required group without a default on Roti Bakar). Passes the
-// "Meja 1" QR token to the specs as E2E_QR_TOKEN.
+// "Meja 1" QR token to the specs as E2E_QR_TOKEN and the counter device
+// cookie as E2E_DEVICE_TOKEN; every staff PIN is 1470.
 export default async function globalSetup() {
   if (existsSync(".env")) process.loadEnvFile(".env");
   const testUrl = process.env.TEST_DATABASE_URL;
@@ -43,14 +44,15 @@ export default async function globalSetup() {
   try {
     const db = drizzle(sql, { schema });
     await migrate(db, { migrationsFolder: "src/db/migrations" });
-    // Throwaway credentials: nobody signs in during these specs.
+    // Throwaway credentials: the owner never signs in during these specs.
     const secret = () => randomBytes(32).toString("base64url");
+    const deviceToken = secret();
     await seedDatabase(db, {
       ownerEmail: "pemilik@e2e.test",
       ownerPassword: secret(),
       ownerPin: "2580",
       staffPin: "1470",
-      counterDeviceToken: secret(),
+      counterDeviceToken: deviceToken,
       tokenHashPepper: pepper,
     });
 
@@ -90,6 +92,7 @@ export default async function globalSetup() {
         ),
       );
     process.env.E2E_QR_TOKEN = qr!.token;
+    process.env.E2E_DEVICE_TOKEN = deviceToken;
   } finally {
     await sql.end();
   }
