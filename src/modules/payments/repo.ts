@@ -14,6 +14,8 @@ const chargeColumns = {
   providerRef: payments.providerRef,
   qrString: payments.qrString,
   expiresAt: payments.expiresAt,
+  paidAt: payments.paidAt,
+  manualReference: payments.manualReference,
 };
 
 export async function selectLatestPayment(

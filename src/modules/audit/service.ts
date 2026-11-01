@@ -10,6 +10,9 @@ import * as repo from "./repo";
 export const auditActions = [
   "device.register",
   "elevation.grant",
+  "menu_item.available",
+  "menu_item.sold_out",
+  "payment.manual_confirm",
   "refund.request",
   "setting.update",
 ] as const;
@@ -40,9 +43,11 @@ function assertNoSecrets(value: unknown, path: string) {
   }
 }
 
+// `now` is the action's own clock (tests pass one); the database default
+// is used otherwise.
 export async function audit(
   entry: AuditEntry,
-  { db }: { db?: DbExecutor } = {},
+  { db, now }: { db?: DbExecutor; now?: Date } = {},
 ) {
   const metadata = entry.metadata ?? {};
   assertNoSecrets(metadata, "");
@@ -55,7 +60,36 @@ export async function audit(
       entityId: entry.entity?.id ?? null,
       reason: entry.reason ?? null,
       metadata,
+      createdAt: now,
     },
     db,
+  );
+}
+
+// The newest of the given actions per entity, with who did it and when
+// (S-08 "Ditandai habis oleh Dimas, 17.20").
+export async function latestAuditByEntity(
+  entityType: string,
+  entityIds: string[],
+  actions: readonly AuditAction[],
+  { db }: { db?: DbExecutor } = {},
+): Promise<
+  Map<string, { action: AuditAction; actorName: string | null; at: Date }>
+> {
+  const rows = await repo.selectLatestByEntity(
+    entityType,
+    entityIds,
+    [...actions],
+    db,
+  );
+  return new Map(
+    rows.map((row) => [
+      row.entityId!,
+      {
+        action: row.action as AuditAction,
+        actorName: row.actorName,
+        at: row.createdAt,
+      },
+    ]),
   );
 }

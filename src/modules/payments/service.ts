@@ -5,16 +5,24 @@ import { randomToken } from "@/lib/ids";
 import { logger } from "@/lib/logger";
 import { audit } from "@/modules/audit/service";
 import {
+  COUNTER_ROLES,
+  consumeElevation,
+  requireRole,
+  type SessionUser,
+} from "@/modules/auth/service";
+import {
   lockOrderForPayment,
   markOrderPaid,
   orderItemsStillAvailable,
 } from "@/modules/orders/service";
+import { getSettings } from "@/modules/settings/service";
 import type { PaymentProvider, VerifiedPaymentEvent } from "./provider";
 import { createMockProvider, signMockEvent } from "./providers/mock";
 import * as repo from "./repo";
 
-// QRIS payments (FR-PM-01..03, FR-PM-07, Schema §5.2). The browser never
-// marks anything paid: only a verified gateway event does.
+// QRIS payments (FR-PM-01..03, FR-PM-05, FR-PM-07, Schema §5.2). The browser
+// never marks anything paid: only a verified gateway event does, or a staff
+// member confirming a static-QR payment by hand (audited, owner PIN).
 
 // One provider per process, built from the (cached) environment.
 let provider: PaymentProvider | undefined;
@@ -250,6 +258,101 @@ export async function cancelCharges(providerRefs: string[]): Promise<void> {
       logger.warn({ err: error, providerRef }, "could not cancel a charge");
     }
   }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// S-05 (FR-PM-05, Flow §5.4): the customer paid with the stall's static QR
+// and staff found the payment in the bank app. One transaction (order locked
+// first): spend the owner's elevation when the setting asks for it, retire
+// the dynamic charge, record a paid qris_static_manual payment, give the
+// order its queue number and write the audit row. An expired order revives
+// only while its items are still available, like a late payment (FR-PM-07).
+export async function confirmManualPayment(
+  actor: SessionUser | null,
+  input: {
+    orderId: string;
+    reference: string;
+    note?: string;
+    elevationId?: string;
+  },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ status: "paid"; queueNumber: number; paymentId: string }> {
+  const user = requireRole(actor, COUNTER_ROLES);
+  if (!UUID.test(input.orderId)) throw new AppError("NOT_FOUND");
+  const { manual_payment_requires_owner_pin: needsOwnerPin } =
+    await getSettings(["manual_payment_requires_owner_pin"]);
+
+  const result = await getDb().transaction(async (tx) => {
+    const order = await lockOrderForPayment(input.orderId, tx);
+    if (!order) throw new AppError("NOT_FOUND");
+    if (order.status === "expired") {
+      if (!(await orderItemsStillAvailable(order.id, tx))) {
+        throw new AppError("ITEM_SOLD_OUT");
+      }
+    } else if (order.status !== "awaiting_payment") {
+      throw new AppError("ORDER_STATUS_CHANGED", {
+        details: { status: order.status },
+      });
+    }
+
+    let elevation: { elevationId: string; ownerUserId: string } | null = null;
+    if (needsOwnerPin) {
+      if (!input.elevationId) throw new AppError("ELEVATION_REQUIRED");
+      elevation = await consumeElevation(
+        user,
+        { elevationId: input.elevationId, scope: "manual_payment" },
+        { now, db: tx },
+      );
+    }
+
+    const providerRefs = await expirePendingCharges(order.id, now, tx);
+    const payment = await repo.insertPayment(
+      {
+        orderId: order.id,
+        method: "qris_static_manual",
+        status: "paid",
+        amount: order.total,
+        paidAt: now,
+        confirmedBy: user.userId,
+        elevationId: elevation?.elevationId ?? null,
+        manualReference: input.reference,
+        manualNote: input.note || null,
+      },
+      tx,
+    );
+    // A paid payment is already there: a late payment that asked for a
+    // refund keeps the order expired.
+    if (!payment) {
+      throw new AppError("ORDER_STATUS_CHANGED", {
+        details: { status: order.status },
+      });
+    }
+    const queueNumber = await markOrderPaid(order, now, tx);
+    await audit(
+      {
+        action: "payment.manual_confirm",
+        actor: user,
+        entity: { type: "payment", id: payment.id },
+        metadata: {
+          orderId: order.id,
+          amount: order.total,
+          reference: input.reference,
+          elevationId: elevation?.elevationId ?? null,
+          ownerUserId: elevation?.ownerUserId ?? null,
+        },
+      },
+      { db: tx, now },
+    );
+    return { queueNumber, paymentId: payment.id, providerRefs };
+  });
+
+  await cancelCharges(result.providerRefs);
+  return {
+    status: "paid",
+    queueNumber: result.queueNumber,
+    paymentId: result.paymentId,
+  };
 }
 
 // The order's latest payment, for the status screens.

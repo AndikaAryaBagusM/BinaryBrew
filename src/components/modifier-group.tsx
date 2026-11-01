@@ -8,12 +8,14 @@ import type { PublicModifierGroup } from "@/modules/menu/service";
 // Modifier group (Design §5): a radio list when exactly one choice is needed,
 // otherwise checkboxes (a radio cannot be unselected), with the price change
 // on the right. "Wajib pilih" marks required groups; `invalid` highlights one
-// after Add was tapped without a valid choice.
+// after Add was tapped without a valid choice. The Counter size (S-03, Figma
+// 15:1139) shows each option as a large bordered card.
 export type ModifierGroupProps = {
   group: PublicModifierGroup;
   selected: readonly string[];
   onChange: (selected: string[]) => void;
   invalid?: boolean;
+  size?: "customer" | "counter";
 };
 
 export function ModifierGroup({
@@ -21,7 +23,9 @@ export function ModifierGroup({
   selected,
   onChange,
   invalid = false,
+  size = "customer",
 }: ModifierGroupProps) {
+  const counter = size === "counter";
   const single = group.minSelect === 1 && group.maxSelect === 1;
   const required = group.minSelect >= 1;
   const count = group.options.filter((o) => selected.includes(o.id)).length;
@@ -36,18 +40,34 @@ export function ModifierGroup({
   }
 
   return (
-    <fieldset id={`grup-${group.id}`} className="flex flex-col">
-      <legend className="flex w-full items-baseline justify-between gap-2 pb-1">
-        <span className="text-label text-ink">{group.name}</span>
+    <fieldset
+      id={`grup-${group.id}`}
+      className={cn("flex flex-col", counter && "gap-2")}
+    >
+      <legend
+        className={cn(
+          "flex w-full items-center justify-between gap-2",
+          counter ? "pb-2" : "pb-1",
+        )}
+      >
+        <span className={counter ? "text-h2 text-ink" : "text-label text-ink"}>
+          {group.name}
+        </span>
         <span
           className={cn(
             "text-caption",
-            invalid ? "font-semibold text-danger" : "text-ink-muted",
+            invalid
+              ? "font-semibold text-danger"
+              : counter && required
+                ? "rounded-full bg-status-waiting-bg px-2 py-0.5 font-medium text-status-waiting-fg"
+                : "text-ink-muted",
           )}
         >
           {required
             ? t("menu.required")
-            : t("menu.chooseUpTo", { n: group.maxSelect })}
+            : counter
+              ? t("counter.optional", { n: group.maxSelect })
+              : t("menu.chooseUpTo", { n: group.maxSelect })}
         </span>
       </legend>
       {group.options.map((option) => {
@@ -55,7 +75,17 @@ export function ModifierGroup({
         return (
           <label
             key={option.id}
-            className="flex min-h-12 cursor-pointer items-center gap-3 border-b border-line py-2 last:border-b-0 has-disabled:cursor-not-allowed has-disabled:opacity-40"
+            className={cn(
+              "flex cursor-pointer items-center gap-3 has-disabled:cursor-not-allowed has-disabled:opacity-40",
+              counter
+                ? cn(
+                    "min-h-14 rounded-card border px-4 py-2 has-focus-visible:ring-2 has-focus-visible:ring-brand",
+                    checked
+                      ? "border-[1.5px] border-brand bg-accent-soft"
+                      : "border-line bg-surface",
+                  )
+                : "min-h-12 border-b border-line py-2 last:border-b-0",
+            )}
           >
             <input
               type={single ? "radio" : "checkbox"}
@@ -67,8 +97,21 @@ export function ModifierGroup({
               onChange={(event) => toggle(option.id, event.target.checked)}
               className="focus-ring size-5 shrink-0 accent-brand"
             />
-            <span className="flex-1 text-body text-ink">{option.name}</span>
-            <span className="text-body text-ink-muted">
+            <span
+              className={cn(
+                "flex-1 text-ink",
+                counter && checked ? "text-label" : "text-body",
+              )}
+            >
+              {option.name}
+            </span>
+            <span
+              className={
+                counter
+                  ? "text-caption font-medium text-price"
+                  : "text-body text-ink-muted"
+              }
+            >
               {formatPriceDelta(option.priceDelta)}
             </span>
           </label>

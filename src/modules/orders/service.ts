@@ -79,9 +79,50 @@ export async function createSelfOrder(
   payment: PaymentSummary | null;
   replayed: boolean;
 }> {
-  const { order, replayed } = await insertSelfOrder(input, now);
-  // After commit, so the gateway call never runs while locks are held. A
-  // retry with the same key creates the charge if this step failed.
+  // Read before the transaction, so it never waits for a second connection
+  // while holding the client lock.
+  const { qrTokenId } = await requireOrderingQr(input.qrToken);
+  return withCharge(
+    await insertOrder(
+      { ...input, channel: "self_order", qrTokenId, openOrderCap: true },
+      now,
+    ),
+  );
+}
+
+// Walk-in order at the Counter (FR-POS-01, FR-POS-02, Flow §5.3): the same
+// prices, options and availability as self-order, also while self-ordering
+// is closed (E9), without the open-order cap, paid with the tablet's QRIS.
+// clientSession is the tablet browser's own random id.
+export type CounterOrderInput = Omit<SelfOrderInput, "qrToken">;
+
+export async function createCounterOrder(
+  actor: SessionUser | null,
+  input: CounterOrderInput,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{
+  order: CreatedOrder;
+  payment: PaymentSummary | null;
+  replayed: boolean;
+}> {
+  const user = requireRole(actor, COUNTER_ROLES);
+  return withCharge(
+    await insertOrder(
+      { ...input, channel: "counter", createdBy: user.userId },
+      now,
+    ),
+  );
+}
+
+// After commit, so the gateway call never runs while locks are held. A retry
+// with the same key creates the charge if this step failed.
+async function withCharge({
+  order,
+  replayed,
+}: {
+  order: CreatedOrder;
+  replayed: boolean;
+}) {
   const payment = await ensureQrisCharge({
     orderId: order.id,
     orderStatus: order.status,
@@ -91,13 +132,19 @@ export async function createSelfOrder(
   return { order, payment, replayed };
 }
 
-async function insertSelfOrder(
-  input: SelfOrderInput,
+type NewOrder = {
+  clientSession: string;
+  idempotencyKey: string;
+  items: CartLine[];
+} & (
+  | { channel: "self_order"; qrTokenId: string; openOrderCap: true }
+  | { channel: "counter"; createdBy: string }
+);
+
+async function insertOrder(
+  input: NewOrder,
   now: Date,
 ): Promise<{ order: CreatedOrder; replayed: boolean }> {
-  // Read before the transaction, so it never waits for a second connection
-  // while holding the client lock.
-  const { qrTokenId } = await requireOrderingQr(input.qrToken);
   const settings = await getSettings([
     "tax_rate_bps",
     "tax_inclusive",
@@ -116,11 +163,13 @@ async function insertSelfOrder(
     );
     if (existing) return { order: created(existing), replayed: true };
 
-    const open = await repo.countOpenOrders(input.clientSession, now, tx);
-    if (open >= MAX_OPEN_ORDERS) {
-      throw new AppError("OPEN_ORDER_LIMIT", {
-        details: { limit: MAX_OPEN_ORDERS },
-      });
+    if (input.channel === "self_order") {
+      const open = await repo.countOpenOrders(input.clientSession, now, tx);
+      if (open >= MAX_OPEN_ORDERS) {
+        throw new AppError("OPEN_ORDER_LIMIT", {
+          details: { limit: MAX_OPEN_ORDERS },
+        });
+      }
     }
 
     const items = await getOrderableItems(
@@ -153,8 +202,9 @@ async function insertSelfOrder(
       {
         publicToken: newPublicToken(),
         businessDate: businessDate(now, settings.business_day_cutoff),
-        channel: "self_order",
-        qrTokenId,
+        channel: input.channel,
+        qrTokenId: input.channel === "self_order" ? input.qrTokenId : null,
+        createdBy: input.channel === "counter" ? input.createdBy : null,
         clientSession: input.clientSession,
         idempotencyKey: input.idempotencyKey,
         subtotal: priced.subtotal,
@@ -344,6 +394,98 @@ export async function cancelSelfOrder(
   });
   await cancelCharges(providerRefs);
   return { status };
+}
+
+// S-04 "Batalkan": an unpaid counter order expires now, with its charge. Like
+// cancelSelfOrder, anything else is left as it is and its status returned:
+// the customer may have paid a moment earlier.
+export async function cancelCounterOrder(
+  actor: SessionUser | null,
+  orderId: string,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ status: OrderStatus }> {
+  requireRole(actor, COUNTER_ROLES);
+  if (!UUID.test(orderId)) throw new AppError("NOT_FOUND");
+  const { status, providerRefs } = await getDb().transaction(async (tx) => {
+    const order = await repo.lockOrder(orderId, tx);
+    if (!order) throw new AppError("NOT_FOUND");
+    if (order.status !== "awaiting_payment" || order.channel !== "counter") {
+      return { status: order.status, providerRefs: [] };
+    }
+    const providerRefs = await expireOrder(order.id, now, tx);
+    return { status: "expired" as const, providerRefs };
+  });
+  await cancelCharges(providerRefs);
+  return { status };
+}
+
+// S-04 and S-06 (FR-POS-05): one order with its lines, totals, payment and
+// times, for any channel.
+export type CounterOrderDetail = {
+  id: string;
+  publicToken: string;
+  queueNumber: number | null;
+  status: OrderStatus;
+  channel: "self_order" | "counter";
+  table: string | null;
+  createdByName: string | null;
+  subtotal: number;
+  serviceCharge: number;
+  taxAmount: number;
+  taxInclusive: boolean;
+  total: number;
+  createdAt: Date;
+  expiresAt: Date | null;
+  paidAt: Date | null;
+  preparingAt: Date | null;
+  readyAt: Date | null;
+  completedAt: Date | null;
+  items: {
+    name: string;
+    quantity: number;
+    lineTotal: number;
+    options: string[];
+  }[];
+  payment: {
+    id: string;
+    method: "qris_dynamic" | "qris_static_manual" | "cash";
+    status: "pending" | "paid" | "failed" | "expired" | "refunded";
+    amount: number;
+    qrString: string | null; // only while the charge is pending
+    expiresAt: Date | null;
+    paidAt: Date | null;
+    reference: string | null; // manual reference, else the gateway's
+  } | null;
+};
+
+export async function getCounterOrder(
+  actor: SessionUser | null,
+  orderId: string,
+): Promise<CounterOrderDetail> {
+  requireRole(actor, COUNTER_ROLES);
+  if (!UUID.test(orderId)) throw new AppError("NOT_FOUND");
+  const order = await repo.selectCounterOrder(orderId);
+  if (!order) throw new AppError("NOT_FOUND");
+  const [lines, payment] = await Promise.all([
+    repo.selectOrderLines(order.id),
+    getOrderPayment(order.id),
+  ]);
+  return {
+    ...order,
+    items: lines,
+    payment: payment
+      ? {
+          id: payment.id,
+          method: payment.method,
+          status: payment.status,
+          amount: payment.amount,
+          qrString: payment.status === "pending" ? payment.qrString : null,
+          expiresAt: payment.expiresAt,
+          paidAt: payment.paidAt,
+          reference: payment.manualReference ?? payment.providerRef,
+        }
+      : null,
+  };
 }
 
 // Schema §5.3 expiry, shared with the sweep (P1-09). The caller holds the

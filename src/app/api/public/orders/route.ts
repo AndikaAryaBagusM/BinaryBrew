@@ -1,7 +1,7 @@
-import { AppError } from "@/lib/errors";
 import { jsonData, readJson, route } from "@/lib/http";
 import { assertSameOrigin, clientIp } from "@/modules/auth/request";
-import { clientToken, createOrderBody } from "@/modules/orders/schemas";
+import { idempotencyKeyFrom } from "@/modules/orders/request";
+import { createOrderBody } from "@/modules/orders/schemas";
 import { checkOrderRateLimit, createSelfOrder } from "@/modules/orders/service";
 
 // Self-order checkout (Tech §6). 201 for a new order, 200 when a retried
@@ -9,12 +9,7 @@ import { checkOrderRateLimit, createSelfOrder } from "@/modules/orders/service";
 // the order's QRIS charge.
 export const POST = route(async (request) => {
   assertSameOrigin(request);
-  const idempotencyKey = request.headers.get("idempotency-key");
-  if (!idempotencyKey || !clientToken.safeParse(idempotencyKey).success) {
-    throw new AppError("VALIDATION_FAILED", {
-      details: { fields: ["idempotency-key"] },
-    });
-  }
+  const idempotencyKey = idempotencyKeyFrom(request);
   const body = await readJson(request, createOrderBody);
   checkOrderRateLimit(clientIp(request), body.clientSession);
 

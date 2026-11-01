@@ -107,3 +107,35 @@ describe("QuantityStepper (Design §5)", () => {
     );
   });
 });
+
+describe("Counter variants (S-02, S-03)", () => {
+  it("shows option cards with the optional limit", () => {
+    const markup = html(
+      <ModifierGroup
+        size="counter"
+        group={extras}
+        selected={["o-shot"]}
+        onChange={noop}
+      />,
+    );
+    expect(markup).toContain("Opsional · maks 2");
+    expect(markup).not.toContain("Pilih maks. 2");
+    expect(markup.match(/type="checkbox"/g)).toHaveLength(3);
+  });
+
+  it("lets a cart line go to zero with a named remove button", () => {
+    const markup = html(
+      <QuantityStepper
+        size="counter"
+        min={0}
+        value={1}
+        onChange={noop}
+        decreaseLabel="Hapus Croissant"
+      />,
+    );
+    expect(markup).toMatch(/<button[^>]*aria-label="Hapus Croissant"/);
+    expect(markup).not.toMatch(
+      /<button[^>]*aria-label="Hapus Croissant"[^>]*disabled=""|<button[^>]*disabled=""[^>]*aria-label="Hapus Croissant"/,
+    );
+  });
+});

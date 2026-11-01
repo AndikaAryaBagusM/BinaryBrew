@@ -1,6 +1,12 @@
 import { and, asc, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
-import { orderItemModifiers, orderItems, orders, qrTokens } from "@/db/schema";
+import {
+  orderItemModifiers,
+  orderItems,
+  orders,
+  qrTokens,
+  users,
+} from "@/db/schema";
 
 // SQL only; rules live in service.ts.
 
@@ -89,11 +95,44 @@ export async function lockOrder(id: string, db: DbExecutor) {
     .select({
       id: orders.id,
       status: orders.status,
+      channel: orders.channel,
       businessDate: orders.businessDate,
+      total: orders.total,
     })
     .from(orders)
     .where(eq(orders.id, id))
     .for("update");
+  return row;
+}
+
+// S-04, S-06: the order with its table label (also of a rotated code) and the
+// name of the user who took it at the Counter.
+export async function selectCounterOrder(id: string, db: DbExecutor = getDb()) {
+  const [row] = await db
+    .select({
+      id: orders.id,
+      publicToken: orders.publicToken,
+      queueNumber: orders.queueNumber,
+      status: orders.status,
+      channel: orders.channel,
+      table: qrTokens.label,
+      createdByName: users.name,
+      subtotal: orders.subtotal,
+      serviceCharge: orders.serviceCharge,
+      taxAmount: orders.taxAmount,
+      taxInclusive: orders.taxInclusive,
+      total: orders.total,
+      createdAt: orders.createdAt,
+      expiresAt: orders.expiresAt,
+      paidAt: orders.paidAt,
+      preparingAt: orders.preparingAt,
+      readyAt: orders.readyAt,
+      completedAt: orders.completedAt,
+    })
+    .from(orders)
+    .leftJoin(qrTokens, eq(qrTokens.id, orders.qrTokenId))
+    .leftJoin(users, eq(users.id, orders.createdBy))
+    .where(eq(orders.id, id));
   return row;
 }
 

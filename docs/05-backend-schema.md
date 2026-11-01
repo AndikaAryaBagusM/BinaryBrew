@@ -636,6 +636,8 @@ All multi-step changes happen inside one database transaction. Lock rows in a fi
 6. (Phase 2) For each order line and modifier, compute ingredient quantities × order quantity; insert `stock_movements` of type `sale_deduction`, update `ingredients.stock_qty`; compute `order_items.unit_cogs` from current `avg_cost`.
 7. Write `audit_logs` for manual confirmations. Emit `NOTIFY order_events` after commit.
 
+Manual confirmation (S-05, FR-PM-05) follows the same steps from step 2, with these differences: it needs `awaiting_payment`, or `expired` with every item still available (otherwise it is refused with `ITEM_SOLD_OUT`, and no refund is created because no money moved through the system); when the setting asks for it, the owner elevation is consumed inside the transaction; the order's pending `qris_dynamic` payment is set `expired` and a new `qris_static_manual` payment is inserted as `paid` with the staff's reference. After commit the dynamic charge is cancelled at the provider.
+
 ### 5.3 Status changes
 
 `paid → preparing → ready → completed` each set the matching timestamp. Moving backwards is not allowed. A scheduled sweep sets `ready → completed` after `ready_auto_complete_minutes`, and `awaiting_payment → expired` once `expires_at` has passed (also marking its pending payment `expired`).

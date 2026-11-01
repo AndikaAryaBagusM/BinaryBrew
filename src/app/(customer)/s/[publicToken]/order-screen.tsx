@@ -2,10 +2,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Button } from "@/components/button";
 import { EdgeState } from "@/components/edge-state";
 import { t } from "@/i18n";
+import { useCurrentSecond } from "@/lib/clock";
 import { updateCart } from "@/lib/use-cart";
 import { useEventStream } from "@/lib/use-event-stream";
 import type { PublicOrder } from "@/modules/orders/service";
@@ -40,16 +41,6 @@ async function fetchOrder(publicToken: string): Promise<OrderData> {
   return (await response.json()).data;
 }
 
-// The current second, ticking; null on the server and during hydration so
-// the countdown markup matches.
-const subscribeClock = (onTick: () => void) => {
-  const id = setInterval(onTick, 1000);
-  return () => clearInterval(id);
-};
-const currentSecond = () => Math.floor(Date.now() / 1000);
-const useClock = () =>
-  useSyncExternalStore(subscribeClock, currentSecond, () => null);
-
 export function OrderScreen({
   initial,
   qr,
@@ -82,7 +73,7 @@ export function OrderScreen({
     }
   }, [order.status]);
 
-  const second = useClock();
+  const second = useCurrentSecond();
   const deadline = order.expiresAt ? Date.parse(order.expiresAt) : null;
   const remainingMs =
     deadline === null || second === null ? null : deadline - second * 1000;

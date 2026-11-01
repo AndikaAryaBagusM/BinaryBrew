@@ -1,5 +1,11 @@
 import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
+import { audit, latestAuditByEntity } from "@/modules/audit/service";
+import {
+  COUNTER_ROLES,
+  requireRole,
+  type SessionUser,
+} from "@/modules/auth/service";
 import type { PricingItem, PricingRates } from "@/modules/orders/pricing";
 import { getSettings } from "@/modules/settings/service";
 import * as repo from "./repo";
@@ -60,7 +66,21 @@ export async function getPublicMenu(qrToken: string): Promise<PublicMenu> {
   if (!qr) throw new AppError("QR_INVALID");
   if (!settings.ordering_enabled) throw new AppError("ORDERING_CLOSED");
 
-  // One snapshot, so an item cannot show a group that was just unlinked.
+  return {
+    shopName: settings.shop_name,
+    table: qr.label,
+    pricing: {
+      taxRateBps: settings.tax_rate_bps,
+      taxInclusive: settings.tax_inclusive,
+      serviceChargeBps: settings.service_charge_bps,
+    },
+    categories: await loadCategories(),
+  };
+}
+
+// Active categories with their active items, options and availability. One
+// snapshot, so an item cannot show a group that was just unlinked.
+function loadCategories(): Promise<PublicMenu["categories"]> {
   return getDb().transaction(
     async (tx) => {
       const [categories, items] = await Promise.all([
@@ -80,43 +100,125 @@ export async function getPublicMenu(qrToken: string): Promise<PublicMenu> {
       const groupsByItem = groupBy(links, (link) => link.menuItemId);
       const itemsByCategory = groupBy(items, (item) => item.categoryId);
 
-      return {
-        shopName: settings.shop_name,
-        table: qr.label,
-        pricing: {
-          taxRateBps: settings.tax_rate_bps,
-          taxInclusive: settings.tax_inclusive,
-          serviceChargeBps: settings.service_charge_bps,
-        },
-        categories: categories.map((category) => ({
-          id: category.id,
-          name: category.name,
-          items: (itemsByCategory.get(category.id) ?? []).map((item) => ({
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: item.price,
-            imageUrl: item.imageUrl,
-            // P2-03 switches this to the availability view (stock).
-            isAvailable: !item.manualSoldOut,
-            modifierGroups: (groupsByItem.get(item.id) ?? []).map((group) => ({
-              id: group.id,
-              name: group.name,
-              minSelect: group.minSelect,
-              maxSelect: group.maxSelect,
-              options: (optionsByGroup.get(group.id) ?? []).map((option) => ({
-                id: option.id,
-                name: option.name,
-                priceDelta: option.priceDelta,
-                isDefault: option.isDefault,
-              })),
+      return categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        items: (itemsByCategory.get(category.id) ?? []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          imageUrl: item.imageUrl,
+          // P2-03 switches this to the availability view (stock).
+          isAvailable: !item.manualSoldOut,
+          modifierGroups: (groupsByItem.get(item.id) ?? []).map((group) => ({
+            id: group.id,
+            name: group.name,
+            minSelect: group.minSelect,
+            maxSelect: group.maxSelect,
+            options: (optionsByGroup.get(group.id) ?? []).map((option) => ({
+              id: option.id,
+              name: option.name,
+              priceDelta: option.priceDelta,
+              isDefault: option.isDefault,
             })),
           })),
         })),
-      };
+      }));
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
+}
+
+// Counter menu (S-02, S-08, FR-POS-01, FR-POS-04): the same items and rules
+// as self-order, also while self-ordering is closed (Flow E9). A sold-out
+// item says who marked it and when.
+
+export type CounterMenuItem = PublicMenuItem & {
+  // Who marked it and when; both null for an item sold out without a record.
+  soldOut: { byName: string | null; at: Date | null } | null;
+};
+
+export type CounterMenu = {
+  pricing: PricingRates;
+  manualPaymentNeedsOwnerPin: boolean;
+  categories: { id: string; name: string; items: CounterMenuItem[] }[];
+};
+
+const SOLD_OUT_ACTIONS = ["menu_item.sold_out", "menu_item.available"] as const;
+
+export async function getCounterMenu(
+  actor: SessionUser | null,
+): Promise<CounterMenu> {
+  requireRole(actor, COUNTER_ROLES);
+  const [settings, categories] = await Promise.all([
+    getSettings([
+      "tax_rate_bps",
+      "tax_inclusive",
+      "service_charge_bps",
+      "manual_payment_requires_owner_pin",
+    ]),
+    loadCategories(),
+  ]);
+  const soldOutIds = categories.flatMap((category) =>
+    category.items.filter((item) => !item.isAvailable).map((item) => item.id),
+  );
+  const marks = await latestAuditByEntity(
+    "menu_item",
+    soldOutIds,
+    SOLD_OUT_ACTIONS,
+  );
+  return {
+    pricing: {
+      taxRateBps: settings.tax_rate_bps,
+      taxInclusive: settings.tax_inclusive,
+      serviceChargeBps: settings.service_charge_bps,
+    },
+    manualPaymentNeedsOwnerPin: settings.manual_payment_requires_owner_pin,
+    categories: categories.map((category) => ({
+      ...category,
+      items: category.items.map((item) => {
+        if (item.isAvailable) return { ...item, soldOut: null };
+        const mark = marks.get(item.id);
+        return {
+          ...item,
+          soldOut:
+            mark?.action === "menu_item.sold_out"
+              ? { byName: mark.actorName, at: mark.at }
+              : { byName: null, at: null },
+        };
+      }),
+    })),
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// One tap on S-08 (FR-POS-04). The customer menu and checkout read the flag
+// on every request, so the change shows there at once. Audited only when the
+// flag actually changes.
+export async function setManualSoldOut(
+  actor: SessionUser | null,
+  input: { menuItemId: string; soldOut: boolean },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ menuItemId: string; soldOut: boolean }> {
+  const user = requireRole(actor, COUNTER_ROLES);
+  if (!UUID.test(input.menuItemId)) throw new AppError("NOT_FOUND");
+  await getDb().transaction(async (tx) => {
+    const item = await repo.lockActiveItem(input.menuItemId, tx);
+    if (!item) throw new AppError("NOT_FOUND");
+    if (item.manualSoldOut === input.soldOut) return;
+    await repo.setManualSoldOut(item.id, input.soldOut, now, tx);
+    await audit(
+      {
+        action: input.soldOut ? "menu_item.sold_out" : "menu_item.available",
+        actor: user,
+        entity: { type: "menu_item", id: item.id },
+      },
+      { db: tx, now },
+    );
+  });
+  return { menuItemId: input.menuItemId, soldOut: input.soldOut };
 }
 
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {

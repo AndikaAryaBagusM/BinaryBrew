@@ -34,11 +34,11 @@ export default defineConfig({
         channel: "chrome",
         viewport: { width: 360, height: 780 },
       },
-      testIgnore: "counter.spec.ts",
+      testIgnore: "counter*.spec.ts",
     },
     {
       name: "tablet",
-      testMatch: "counter.spec.ts",
+      testMatch: "counter*.spec.ts",
       use: {
         channel: "chrome",
         viewport: { width: 1280, height: 800 },

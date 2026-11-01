@@ -114,3 +114,25 @@ export function selectItemsForOrder(ids: string[], db: DbExecutor = getDb()) {
     .innerJoin(categories, eq(categories.id, menuItems.categoryId))
     .where(inArray(menuItems.id, ids));
 }
+
+// S-08: an active item, locked for the sold-out toggle.
+export async function lockActiveItem(id: string, db: DbExecutor) {
+  const [row] = await db
+    .select({ id: menuItems.id, manualSoldOut: menuItems.manualSoldOut })
+    .from(menuItems)
+    .where(and(eq(menuItems.id, id), eq(menuItems.isActive, true)))
+    .for("update");
+  return row;
+}
+
+export async function setManualSoldOut(
+  id: string,
+  soldOut: boolean,
+  now: Date,
+  db: DbExecutor,
+) {
+  await db
+    .update(menuItems)
+    .set({ manualSoldOut: soldOut, updatedAt: now })
+    .where(eq(menuItems.id, id));
+}

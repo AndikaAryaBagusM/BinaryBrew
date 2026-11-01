@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Ban,
   BellRing,
   ChevronDown,
   Lock,
@@ -30,13 +31,22 @@ import { createLocalStore, useLocalStore } from "@/lib/local-store";
 import { formatQueueNumber } from "@/lib/order-display";
 import { formatTime } from "@/lib/time";
 import { useEventStream } from "@/lib/use-event-stream";
+import { api, type CounterMenuData, type CounterMenuItemData } from "./api";
+import { AvailabilityPanel } from "./availability-panel";
+import { type Charge, ChargeDialog, counterOrderKey } from "./charge-dialog";
+import { clearCounterCart } from "./counter-cart";
+import { CustomizeDialog } from "./customize-dialog";
 import { LockOverlay } from "./lock-overlay";
+import { OrderDetail } from "./order-detail";
+import { PosPanel, type PosPanelHandle } from "./pos-panel";
 import { lockStore, useIdleLock } from "./use-idle-lock";
 
-// S-02 Counter (Figma 14:4, 14:577; Design §6.2, Flow §5): the queue column
-// updates over SSE with a 10 s poll as the safety net. A new paid order
-// chimes, gets an accent border for 5 s and a toast. Status buttons move an
-// order one step at once and roll back if the server says no.
+// S-02 Counter (Figma 14:4, 14:577; Design §6.2, Flow §5): the POS on the
+// left (with S-03, S-04, S-05, S-07 and the S-08 sold-out panel) and the
+// queue column, which updates over SSE with a 10 s poll as the safety net. A
+// new paid order chimes, gets an accent border for 5 s and a toast. Status
+// buttons move an order one step at once and roll back if the server says
+// no; tapping a card opens S-06.
 
 // GET /api/counter/orders, as JSON.
 export type CounterOrderData = {
@@ -59,6 +69,7 @@ const filters: { value: Filter; label: MessageKey }[] = [
 ];
 
 const QUEUE_KEY = ["counter-queue"];
+const MENU_KEY = ["counter-menu"];
 const HIGHLIGHT_MS = 5_000;
 const ALERT_MS = 4_000;
 
@@ -96,9 +107,13 @@ async function fetchQueue(): Promise<CounterOrderData[]> {
 export function CounterScreen({
   user,
   initial,
+  initialMenu,
+  mockPay,
 }: {
   user: { name: string; sessionId: string };
   initial: CounterOrderData[];
+  initialMenu: CounterMenuData;
+  mockPay: boolean;
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -112,6 +127,13 @@ export function CounterScreen({
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [alert, setAlert] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [customizing, setCustomizing] = useState<CounterMenuItemData | null>(
+    null,
+  );
+  const [charge, setCharge] = useState<Charge | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const pos = useRef<PosPanelHandle>(null);
 
   // Orders already on screen; anything else in a fetch is an arrival.
   const seen = useRef(new Set(initial.map((order) => order.id)));
@@ -132,6 +154,7 @@ export function CounterScreen({
 
   function goToLogin() {
     lockStore.set(null);
+    clearCounterCart();
     router.replace("/counter/login");
   }
 
@@ -171,8 +194,25 @@ export function CounterScreen({
     initialData: initial,
     refetchInterval: 10_000,
   });
+  // Prices and availability: the server's on every fetch, never cached
+  // across requests; S-08 and a sold-out refusal refetch at once.
+  const { data: menu } = useQuery({
+    queryKey: MENU_KEY,
+    queryFn: async () => {
+      const result = await api<CounterMenuData>("/api/counter/menu");
+      if (result.ok) return result.data;
+      if (result.status === 401) goToLogin();
+      throw new Error(result.error.message);
+    },
+    initialData: initialMenu,
+    refetchInterval: 30_000,
+  });
+  const refreshMenu = () =>
+    queryClient.invalidateQueries({ queryKey: MENU_KEY });
+
   useEventStream("/api/stream/counter", ["order", "sync"], () => {
     void queryClient.invalidateQueries({ queryKey: QUEUE_KEY });
+    void queryClient.invalidateQueries({ queryKey: ["counter-order"] });
   });
 
   function showAlert(message: string) {
@@ -223,6 +263,15 @@ export function CounterScreen({
     }
   }
 
+  // The step button in S-06: the same optimistic move as on the card.
+  async function advanceFromDetail(orderId: string) {
+    const order = queryClient
+      .getQueryData<CounterOrderData[]>(QUEUE_KEY)
+      ?.find((each) => each.id === orderId);
+    if (order) await advance(order);
+    await queryClient.invalidateQueries({ queryKey: counterOrderKey(orderId) });
+  }
+
   function show(orderId: string) {
     setFilter("all");
     setToast(null);
@@ -266,6 +315,14 @@ export function CounterScreen({
             onSwitchUser={() => void switchUser()}
           />
           <span className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setAvailabilityOpen(true)}
+            className="focus-ring flex h-14 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-5 text-counter-label text-ink active:bg-accent-soft"
+          >
+            <Ban aria-hidden="true" size={22} />
+            {t("counter.soldOutButton")}
+          </button>
           {newest ? (
             <button
               type="button"
@@ -294,16 +351,14 @@ export function CounterScreen({
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <main className="flex w-[60%] flex-col p-6">
-            <section className="flex flex-1 flex-col items-center justify-center gap-2 rounded-[14px] border border-line bg-surface p-6 text-center">
-              <h2 className="text-counter-title text-ink">
-                {t("counter.posTitle")}
-              </h2>
-              <p className="max-w-md text-counter-body text-ink-muted">
-                {t("counter.posSoon")}
-              </p>
-            </section>
-          </main>
+          <PosPanel
+            ref={pos}
+            menu={menu}
+            onCustomize={setCustomizing}
+            onCharge={setCharge}
+            onMenuStale={() => void refreshMenu()}
+            onSignedOut={goToLogin}
+          />
 
           <aside
             aria-labelledby="queue-title"
@@ -378,6 +433,7 @@ export function CounterScreen({
                       oldest={order.id === oldestId}
                       busy={busy.has(order.id)}
                       onAdvance={() => void advance(order)}
+                      onOpen={() => setDetailId(order.id)}
                     />
                   </li>
                 ))}
@@ -421,6 +477,51 @@ export function CounterScreen({
           </aside>
         </div>
       </div>
+      {/* Dialogs wait under the lock: two modal layers fight over focus. */}
+      {!locked && customizing && (
+        <CustomizeDialog
+          item={customizing}
+          onClose={() => setCustomizing(null)}
+          onAdd={(line) => {
+            pos.current?.add(line);
+            setCustomizing(null);
+          }}
+        />
+      )}
+      {!locked && charge && (
+        <ChargeDialog
+          key={charge.id}
+          charge={charge}
+          needsOwnerPin={menu.manualPaymentNeedsOwnerPin}
+          mockPay={mockPay}
+          onPaid={() => {
+            clearCounterCart();
+            void queryClient.invalidateQueries({ queryKey: QUEUE_KEY });
+          }}
+          onRetry={() => {
+            setCharge(null);
+            pos.current?.charge();
+          }}
+          onClose={() => setCharge(null)}
+          onSignedOut={goToLogin}
+        />
+      )}
+      {!locked && detailId && (
+        <OrderDetail
+          orderId={detailId}
+          onAdvance={(order) => advanceFromDetail(order.id)}
+          onClose={() => setDetailId(null)}
+          onSignedOut={goToLogin}
+        />
+      )}
+      {!locked && availabilityOpen && (
+        <AvailabilityPanel
+          menu={menu}
+          onChanged={refreshMenu}
+          onClose={() => setAvailabilityOpen(false)}
+          onSignedOut={goToLogin}
+        />
+      )}
       {locked && (
         <LockOverlay
           name={user.name}
