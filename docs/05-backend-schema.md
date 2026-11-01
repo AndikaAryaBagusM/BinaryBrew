@@ -289,6 +289,7 @@ create table order_items (
   quantity        smallint not null check (quantity between 1 and 20),
   line_total      integer not null check (line_total >= 0),
   unit_cogs       integer,                                      -- HPP per unit incl. modifiers, set when paid; null if recipe incomplete
+  position        smallint not null default 0,                  -- line order as the customer chose (receipt, status page)
   constraint order_items_line_total_matches check (line_total = (unit_price + modifiers_total) * quantity)
 );
 create index order_items_order_idx on order_items (order_id);
@@ -301,6 +302,7 @@ create table order_item_modifiers (
   group_name_snapshot   text not null,
   option_name_snapshot  text not null,
   price_delta_snapshot  integer not null default 0,
+  position              smallint not null default 0,            -- option order within the line
   ingredient_deltas     jsonb not null default '[]'::jsonb      -- [{"ingredientId": "...", "qtyDelta": 9}]
 );
 create index order_item_modifiers_item_idx on order_item_modifiers (order_item_id);

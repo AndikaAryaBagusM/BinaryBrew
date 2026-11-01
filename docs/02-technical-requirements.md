@@ -131,7 +131,7 @@ binary-brew/
 │  │  ├─ settings/
 │  │  └─ audit/
 │  ├─ db/                     # schema.ts (Drizzle), client.ts, migrations/*.sql, seed/
-│  ├─ lib/                    # money.ts, time.ts, errors.ts, logger.ts, ids.ts, sse.ts
+│  ├─ lib/                    # money.ts, time.ts, errors.ts, logger.ts, ids.ts, sse.ts, use-event-stream.ts
 │  ├─ i18n/id.json            # all UI text (Indonesian)
 │  └─ components/             # shared UI components
 ├─ jobs/apriori/              # run.py, requirements.txt, tests
@@ -172,8 +172,9 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 |---|---|---|
 | `GET /api/public/menu?qr=<token>` | Public | Categories, items, availability, modifier groups. Rejects invalid/rotated token. |
 | `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, `status`, `total`, `expiresAt` and `payment` (`id`, `qrString`, `amount`, `expiresAt`); the charge is created after the order commits, and a retry with the same key creates it if that failed. |
-| `GET /api/public/orders/{publicToken}` | Token | Status, items, totals, queue number, receipt. |
-| `GET /api/stream/orders/{publicToken}` | Token | SSE: status changes for that order. |
+| `GET /api/public/orders/{publicToken}` | Token | Status, items with options, totals, queue number, payment (QR string only while it can be paid), menu path. `no-store`; 404 for an unknown token. |
+| `POST /api/public/orders/{publicToken}/cancel` | Token, same origin | C-05 "Kembali ke keranjang": an unpaid self-order expires now with its pending charge (charge cancelled at the provider, best effort). Any other order is left unchanged (BR-06). Returns `{status}`. |
+| `GET /api/stream/orders/{publicToken}` | Token | SSE: `order` events `{status, queueNumber}` for that order, the current state first. 404 for an unknown token. |
 | `POST /api/public/recommendations` | Public + rate limit | Body: cart item ids + `clientSession`; returns up to 2 suggestions. |
 | `POST /api/public/recommendations/events` | Public + rate limit | Log `shown`/`accepted`/`rejected`. |
 | `GET /api/public/board` | Public | Current Preparing and Ready queue numbers. |
@@ -226,7 +227,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 - After any commit that changes an order's status, call `pg_notify('order_events', json)`.
 - **Clients must still work if SSE drops:** the status page and Counter screen refetch on reconnect and poll every 10 seconds as a safety net.
 - Send a comment heartbeat every 20 seconds to keep proxies from closing idle streams.
-- The TV board, status page and Counter use the same helper in `lib/sse.ts`.
+- Server: `lib/sse.ts` builds the stream response (`retry:`, heartbeat, cleanup on disconnect); `modules/orders/events.ts` holds the shared LISTEN connection. Client: the TV board, status page and Counter use `lib/use-event-stream.ts`, which refetches (TanStack Query) on every event and every reconnect.
 
 ## 8. Payments
 

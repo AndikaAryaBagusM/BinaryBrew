@@ -1,10 +1,18 @@
-import { CircleAlert, QrCode, Store, type LucideIcon } from "lucide-react";
+import {
+  CircleAlert,
+  QrCode,
+  SearchX,
+  Store,
+  Timer,
+  type LucideIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { t, type MessageKey } from "@/i18n";
 
 // C-08 edge states (Design §7): one layout with an icon, a title, one
 // sentence and an optional action. Later tasks add the checkout variants.
-export type EdgeStateVariant = "qrInvalid" | "closed" | "error";
+export type EdgeStateVariant =
+  "qrInvalid" | "closed" | "orderNotFound" | "paymentExpired" | "error";
 
 const variants: Record<
   EdgeStateVariant,
@@ -16,6 +24,16 @@ const variants: Record<
     text: "edge.qrInvalid.text",
   },
   closed: { icon: Store, title: "edge.closed.title", text: "edge.closed.text" },
+  orderNotFound: {
+    icon: SearchX,
+    title: "edge.orderNotFound.title",
+    text: "edge.orderNotFound.text",
+  },
+  paymentExpired: {
+    icon: Timer,
+    title: "pay.expired",
+    text: "pay.expiredText",
+  },
   error: { icon: CircleAlert, title: "error.generic" },
 };
 

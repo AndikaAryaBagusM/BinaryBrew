@@ -6,7 +6,10 @@ import { businessDate } from "@/lib/time";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
 import { getOrderableItems, requireOrderingQr } from "@/modules/menu/service";
 import {
+  cancelCharges,
   ensureQrisCharge,
+  expirePendingCharges,
+  getOrderPayment,
   type PaymentSummary,
 } from "@/modules/payments/service";
 import { getSettings } from "@/modules/settings/service";
@@ -166,8 +169,9 @@ async function insertSelfOrder(
     // Ids are made here so each line's options can point at it.
     const lines = priced.lines.map((line) => ({ ...line, id: randomUUID() }));
     await repo.insertOrderItems(
-      lines.map((line) => ({
+      lines.map((line, position) => ({
         id: line.id,
+        position,
         orderId: order.id,
         menuItemId: line.menuItemId,
         nameSnapshot: line.name,
@@ -181,8 +185,9 @@ async function insertSelfOrder(
     // ingredient_deltas stays [] until recipes exist (Phase 2).
     await repo.insertOrderItemModifiers(
       lines.flatMap((line) =>
-        line.modifiers.map((modifier) => ({
+        line.modifiers.map((modifier, position) => ({
           orderItemId: line.id,
+          position,
           modifierOptionId: modifier.optionId,
           groupNameSnapshot: modifier.groupName,
           optionNameSnapshot: modifier.optionName,
@@ -238,4 +243,117 @@ export async function markOrderPaid(
     db,
   );
   return queueNumber;
+}
+
+// Customer status link (C-05, C-06, C-07). The public token is the only key;
+// the internal id never leaves the server.
+
+const PUBLIC_TOKEN = /^[A-Za-z0-9_-]{22}$/;
+
+export type OrderStatus = LockedOrder["status"];
+
+export type PublicOrder = {
+  publicToken: string;
+  status: OrderStatus;
+  queueNumber: number | null;
+  createdAt: Date;
+  paidAt: Date | null;
+  expiresAt: Date | null;
+  subtotal: number;
+  serviceCharge: number;
+  taxAmount: number;
+  taxInclusive: boolean;
+  total: number;
+  items: {
+    name: string;
+    quantity: number;
+    lineTotal: number;
+    options: string[];
+  }[];
+  payment: {
+    id: string;
+    method: "qris_dynamic" | "qris_static_manual" | "cash";
+    amount: number;
+    qrString: string | null; // only while it can still be paid
+    expiresAt: Date | null;
+  } | null;
+  menuPath: string | null; // null once the table's QR code is rotated
+};
+
+async function findByPublicToken(publicToken: string) {
+  if (!PUBLIC_TOKEN.test(publicToken)) throw new AppError("NOT_FOUND");
+  const row = await repo.selectByPublicToken(publicToken);
+  if (!row) throw new AppError("NOT_FOUND");
+  return row;
+}
+
+export async function getPublicOrder(
+  publicToken: string,
+): Promise<PublicOrder> {
+  const { id, qrToken, ...order } = await findByPublicToken(publicToken);
+  const [items, payment] = await Promise.all([
+    repo.selectOrderLines(id),
+    getOrderPayment(id),
+  ]);
+  const payable =
+    order.status === "awaiting_payment" && payment?.status === "pending";
+  return {
+    ...order,
+    items,
+    payment: payment
+      ? {
+          id: payment.id,
+          method: payment.method,
+          amount: payment.amount,
+          qrString: payable ? payment.qrString : null,
+          expiresAt: payment.expiresAt,
+        }
+      : null,
+    menuPath: qrToken ? `/o/${qrToken}` : null,
+  };
+}
+
+// For the SSE stream: which order_events belong to this link, and its state
+// right now.
+export async function getOrderLiveState(publicToken: string) {
+  const { id, status, queueNumber } = await findByPublicToken(publicToken);
+  return { orderId: id, status, queueNumber };
+}
+
+// C-05 "Kembali ke keranjang": an unpaid self-order expires now, so it stops
+// counting toward the open-order cap. Anything else is left as it is (BR-06)
+// and its status returned, so repeating the call is safe.
+export async function cancelSelfOrder(
+  publicToken: string,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ status: OrderStatus }> {
+  if (!PUBLIC_TOKEN.test(publicToken)) throw new AppError("NOT_FOUND");
+  const { status, providerRefs } = await getDb().transaction(async (tx) => {
+    const order = await repo.lockByPublicToken(publicToken, tx);
+    if (!order) throw new AppError("NOT_FOUND");
+    if (order.status !== "awaiting_payment" || order.channel !== "self_order") {
+      return { status: order.status, providerRefs: [] };
+    }
+    const providerRefs = await expireOrder(order.id, now, tx);
+    return { status: "expired" as const, providerRefs };
+  });
+  await cancelCharges(providerRefs);
+  return { status };
+}
+
+// Schema §5.3 expiry, shared with the sweep (P1-09). The caller holds the
+// order lock; order_events hears it on commit. Returns the charges to cancel
+// at the provider after commit (cancelCharges).
+export async function expireOrder(
+  orderId: string,
+  now: Date,
+  db: DbExecutor,
+): Promise<string[]> {
+  await repo.markOrderExpired(orderId, now, db);
+  const providerRefs = await expirePendingCharges(orderId, now, db);
+  await repo.notifyOrderEvents(
+    { orderId, status: "expired", queueNumber: null },
+    db,
+  );
+  return providerRefs;
 }

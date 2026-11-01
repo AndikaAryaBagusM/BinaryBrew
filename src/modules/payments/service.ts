@@ -215,3 +215,36 @@ export async function mockPay(
   });
   return handlePaymentWebhook("mock", body, headers, { now });
 }
+
+// Schema §5.3: an expiring order takes its pending charge with it. Runs in the
+// caller's transaction with the order locked; returns the charges to cancel
+// at the provider after commit (cancelCharges).
+export async function expirePendingCharges(
+  orderId: string,
+  now: Date,
+  db: DbExecutor,
+): Promise<string[]> {
+  const expired = await repo.expirePendingPayments(orderId, now, db);
+  const provider = getPaymentProvider().name;
+  return expired
+    .filter((row) => row.provider === provider && row.providerRef)
+    .map((row) => row.providerRef!);
+}
+
+// Best effort (Tech §8): a charge left open at the gateway expires there too,
+// and a payment that still arrives follows the late-payment rule.
+export async function cancelCharges(providerRefs: string[]): Promise<void> {
+  const provider = getPaymentProvider();
+  for (const providerRef of providerRefs) {
+    try {
+      await provider.cancelCharge(providerRef);
+    } catch (error) {
+      logger.warn({ err: error, providerRef }, "could not cancel a charge");
+    }
+  }
+}
+
+// The order's latest payment, for the status screens.
+export function getOrderPayment(orderId: string) {
+  return repo.selectLatestPayment(orderId);
+}

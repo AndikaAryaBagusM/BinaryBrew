@@ -238,6 +238,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 | Item sold out at checkout | "Maaf, ada menu yang habis" | Lists items; button "Perbarui keranjang" |
 | Price changed | "Harga diperbarui" | Shows new total; button "Lanjut" |
 | Payment expired | "Waktu pembayaran habis" | "Pesan lagi" |
+| Order link unknown | "Pesanan tidak ditemukan" | none |
 | Server error | "Ada gangguan, coba lagi" | "Coba lagi" |
 
 ### Counter
@@ -333,18 +334,44 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `cart.backToMenu` | Kembali ke menu |
 | `cart.soldOutNote` | Hapus menu yang habis untuk lanjut |
 | `cart.full` | Keranjang sudah penuh, maksimal 30 menu |
+| `checkout.updateCart` | Perbarui keranjang |
+| `checkout.soldOutText` | Menu ini sudah habis dan akan dihapus dari keranjang: |
+| `checkout.priceChangedText` | Total pesananmu sekarang {total} |
 | `reco.title` | Sering dipesan bersama |
 | `reco.add` | Tambah |
 | `reco.continue` | Lanjut bayar |
 | `pay.instruction` | Buka aplikasi bank atau e-wallet, scan, lalu bayar |
 | `pay.countdown` | Bayar dalam {time} |
 | `pay.expired` | Waktu pembayaran habis |
+| `pay.title` | Pembayaran |
+| `pay.qrLabel` | Kode QRIS |
+| `pay.backToCart` | Kembali ke keranjang |
+| `pay.mockPay` | Simulasi bayar |
+| `pay.mockNote` | Hanya untuk pengujian, tidak ada uang yang dibayar |
+| `pay.expiredText` | Pesanan ini dibatalkan karena belum dibayar |
+| `pay.orderAgain` | Pesan lagi |
 | `status.received` | Diterima |
 | `status.preparing` | Disiapkan |
 | `status.ready` | Siap diambil |
 | `status.readyTitle` | Pesanan siap diambil! |
 | `status.preparingText` | Pesananmu sedang disiapkan |
 | `status.autoUpdate` | Layar ini otomatis diperbarui |
+| `status.numberLabel` | Nomor pesananmu |
+| `status.trackerLabel` | Status pesanan |
+| `status.readyText` | Ambil pesananmu di kasir |
+| `status.completedText` | Pesanan sudah diambil. Terima kasih! |
+| `status.voidedText` | Pesanan ini dibatalkan oleh kasir |
+| `status.itemsTitle` | Pesananmu |
+| `status.receiptLink` | Lihat struk |
+| `receipt.orderNumber` | No. pesanan |
+| `receipt.paymentMethod` | Metode bayar |
+| `receipt.method.qris` | QRIS |
+| `receipt.method.manual` | QRIS (dikonfirmasi kasir) |
+| `receipt.method.cash` | Tunai |
+| `receipt.taxIncluded` | Termasuk pajak {amount} |
+| `receipt.thanks` | Terima kasih |
+| `receipt.print` | Cetak |
+| `receipt.backToStatus` | Kembali ke status |
 | `error.qrInvalid` | Kode QR sudah tidak berlaku. Silakan scan kode di kasir. |
 | `error.itemSoldOut` | Maaf, ada menu yang habis |
 | `error.priceChanged` | Harga diperbarui |
@@ -354,6 +381,8 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `edge.qrInvalid.text` | Silakan scan kode di kasir |
 | `edge.closed.title` | Pemesanan sedang ditutup |
 | `edge.closed.text` | Kamu tetap bisa pesan langsung di kasir |
+| `edge.orderNotFound.title` | Pesanan tidak ditemukan |
+| `edge.orderNotFound.text` | Cek lagi tautannya atau tanya kasir |
 | `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
 | `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
 | `auth.loginFailed` | Email atau kata sandi salah |
@@ -390,6 +419,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `common.quantity` | Jumlah |
 | `common.decrease` | Kurangi jumlah |
 | `common.increase` | Tambah jumlah |
+| `common.continue` | Lanjut |
 
 Money format: `Rp 22.000`. Time: 24-hour (`18.30`). Dates: `8 Okt 2026`.
 

@@ -106,12 +106,13 @@ export function route(
 // The second route handler argument; params holds the dynamic segments.
 export type RouteContext<P> = { params: Promise<P> };
 
-// route() for a path with dynamic segments.
+// route() for a path with dynamic segments. A plain Response is allowed for
+// streams (lib/sse.ts).
 export function routeWithParams<P>(
   handler: (
     request: NextRequest,
     context: RouteContext<P>,
-  ) => Promise<NextResponse>,
+  ) => Promise<Response>,
 ) {
   return async (request: NextRequest, context: RouteContext<P>) => {
     try {
