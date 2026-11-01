@@ -51,6 +51,14 @@ export function inclusiveTaxAmount(total: number, bps: number): number {
   return divideRoundHalfUp(total * bps, BPS_PER_UNIT + bps);
 }
 
+// Tax added on top when tax_inclusive is false (Schema §5.1):
+// tax_amount = round((subtotal + service_charge) × tax_rate_bps / 10000)
+export function exclusiveTaxAmount(base: number, bps: number): number {
+  assertAmount(base, "tax base");
+  assertAmount(bps, "tax rate bps");
+  return divideRoundHalfUp(base * bps, BPS_PER_UNIT);
+}
+
 const rupiahDigits = new Intl.NumberFormat("id-ID", {
   maximumFractionDigits: 0,
 });
