@@ -127,7 +127,7 @@ Dark mode for customer and owner screens is optional (Phase 3); the Counter and 
 | Style | Size / weight | Where |
 |---|---|---|
 | Display | 56–96 px / 800 | Order number on C-06, S-04 |
-| Board number | 160–220 px / 800 | T-01 |
+| Board number | Ready 150 px, Preparing 112 px / 800 (at 1920 px wide; scales with the screen) | T-01 |
 | H1 | 24 px / 700 | Screen titles |
 | H2 | 18 px / 700 | Section titles |
 | Body | 16 px / 400 | Default (never below 16 px on customer inputs, to prevent iOS zoom) |
@@ -205,7 +205,7 @@ Menu photos optional per item. When missing, show a coloured tile with the first
 
 ### 6.3 Queue board (1920×1080)
 
-Two columns: **Sedang disiapkan** (left) and **Siap diambil** (right, larger, brighter). Up to 12 numbers per column, then a "+N" indicator. Numbers have a 5-second highlight animation when they enter Ready. No personal data ever appears here.
+Two columns: **Sedang disiapkan** (left) and **Siap diambil** (right, larger, brighter). Preparing shows up to 12 numbers (3 × 4, oldest first) and Ready up to 6 (2 × 3, newest first, so a number that just became ready is always visible); beyond that the last tile reads "+N lagi". Numbers have a 5-second highlight when they enter Ready. No personal data ever appears here.
 
 ### 6.4 Owner
 
@@ -501,6 +501,11 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `board.preparing` | Sedang disiapkan |
 | `board.ready` | Siap diambil |
 | `board.empty` | Belum ada pesanan |
+| `board.title` | Antrean pesanan |
+| `board.emptyHint` | Scan QR di meja untuk memesan dan bayar dari HP. |
+| `board.footer` | Pesan dan bayar lewat QR di meja. Ambil di kasir saat nomormu muncul di 'Siap diambil'. |
+| `board.reconnecting` | Menyambung ulang… |
+| `board.more` | +{n} lagi |
 | `owner.lowStock` | Stok menipis |
 | `owner.noRecipe` | Resep belum ada |
 | `chip.awaiting` | Menunggu bayar |

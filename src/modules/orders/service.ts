@@ -375,6 +375,19 @@ export async function getOrderLiveState(publicToken: string) {
   return { orderId: id, status, queueNumber };
 }
 
+// T-01 queue board (FR-QF-04, D19): numbers only, never anything that could
+// identify a customer. Same scope as the Counter queue: every unfinished
+// order, whatever its business day, until staff move it on.
+export type Board = { preparing: number[]; ready: number[] };
+
+export async function getBoard(): Promise<Board> {
+  const { preparing, ready } = await repo.selectBoardNumbers();
+  // Paid orders always have a number (orders checks).
+  const numbers = (rows: { queueNumber: number | null }[]) =>
+    rows.map((row) => row.queueNumber!);
+  return { preparing: numbers(preparing), ready: numbers(ready) };
+}
+
 // C-05 "Kembali ke keranjang": an unpaid self-order expires now, so it stops
 // counting toward the open-order cap. Anything else is left as it is (BR-06)
 // and its status returned, so repeating the call is safe.

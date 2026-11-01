@@ -177,8 +177,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | `GET /api/stream/orders/{publicToken}` | Token | SSE: `order` events `{status, queueNumber}` for that order, the current state first. 404 for an unknown token. |
 | `POST /api/public/recommendations` | Public + rate limit | Body: cart item ids + `clientSession`; returns up to 2 suggestions. |
 | `POST /api/public/recommendations/events` | Public + rate limit | Log `shown`/`accepted`/`rejected`. |
-| `GET /api/public/board` | Public | Current Preparing and Ready queue numbers. |
-| `GET /api/stream/board` | Public | SSE for the TV board. |
+| `GET /api/public/board` | Public | `{preparing: number[], ready: number[]}`: queue numbers only (D19), Preparing oldest first, Ready newest first. Every unfinished order, like the Counter queue. Never cached. |
+| `GET /api/stream/board` | Public | SSE for the TV board: an empty `change` event when an order enters, moves on or leaves the board, and `sync` once listening; no order data. The board then refetches `GET /api/public/board`. |
 
 ### Payments
 

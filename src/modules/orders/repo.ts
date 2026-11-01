@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
 import {
   orderItemModifiers,
@@ -341,6 +341,24 @@ export async function selectCounterQueue(db: DbExecutor = getDb()) {
     .from(orders)
     .where(inArray(orders.status, ["paid", "preparing", "ready"]))
     .orderBy(asc(orders.paidAt), asc(orders.id));
+}
+
+// T-01: queue numbers only. Preparing oldest first; Ready newest first, so a
+// number that just became ready is never hidden behind "+N".
+export async function selectBoardNumbers(db: DbExecutor = getDb()) {
+  const [preparing, ready] = await Promise.all([
+    db
+      .select({ queueNumber: orders.queueNumber })
+      .from(orders)
+      .where(eq(orders.status, "preparing"))
+      .orderBy(asc(orders.preparingAt), asc(orders.id)),
+    db
+      .select({ queueNumber: orders.queueNumber })
+      .from(orders)
+      .where(eq(orders.status, "ready"))
+      .orderBy(desc(orders.readyAt), desc(orders.id)),
+  ]);
+  return { preparing, ready };
 }
 
 const stampColumn = {

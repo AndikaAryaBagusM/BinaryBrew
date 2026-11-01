@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 import { e2eTestDatabaseUrl } from "./tests/integration/databases";
 
 // End-to-end tests (Tech §12): the customer pages on a phone viewport and
-// the Counter on a landscape tablet, against a dev server on its own port and its own database (global-setup.ts).
+// the Counter on a landscape tablet, the queue board on a 1080p TV, against a dev server on its own port and its own database (global-setup.ts).
 // Stop your own `npm run dev` first: Next.js runs one dev server per project.
 if (existsSync(".env")) process.loadEnvFile(".env");
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -34,7 +34,7 @@ export default defineConfig({
         channel: "chrome",
         viewport: { width: 360, height: 780 },
       },
-      testIgnore: "counter*.spec.ts",
+      testIgnore: ["counter*.spec.ts", "board*.spec.ts"],
     },
     {
       name: "tablet",
@@ -44,6 +44,11 @@ export default defineConfig({
         viewport: { width: 1280, height: 800 },
         hasTouch: true,
       },
+    },
+    {
+      name: "tv",
+      testMatch: "board*.spec.ts",
+      use: { channel: "chrome", viewport: { width: 1920, height: 1080 } },
     },
   ],
   webServer: {
