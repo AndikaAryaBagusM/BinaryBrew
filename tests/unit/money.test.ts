@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   divideRoundHalfUp,
   exclusiveTaxAmount,
+  formatPriceDelta,
   formatRupiah,
   inclusiveTaxAmount,
   serviceChargeAmount,
@@ -72,6 +73,19 @@ describe("inclusiveTaxAmount (Schema §5.1)", () => {
 
   it("rejects a non-integer total", () => {
     expect(() => inclusiveTaxAmount(100.5, 1_100)).toThrow(RangeError);
+  });
+});
+
+describe("formatPriceDelta (C-02 option prices)", () => {
+  it.each([
+    [5_000, "+Rp 5.000"],
+    [-2_000, "−Rp 2.000"],
+  ])("%i → %s", (delta, expected) => {
+    expect(formatPriceDelta(delta)).toBe(expected);
+  });
+
+  it("shows nothing for a free option", () => {
+    expect(formatPriceDelta(0)).toBe("");
   });
 });
 

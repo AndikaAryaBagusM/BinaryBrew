@@ -32,6 +32,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 
 | Package                  | Version |
 | ------------------------ | ------- |
+| `@playwright/test`       | 1.64.1  |
 | `@tailwindcss/turbopack` | 4.3.3   |
 | `@types/node`            | 24.19.2 |
 | `@types/react`           | 19.3.0  |

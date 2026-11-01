@@ -11,6 +11,14 @@ export function emptyTestDatabaseUrl(testUrl: string): string {
   return url.toString();
 }
 
+// End-to-end database (…_e2e_test): migrated and seeded fresh by
+// tests/e2e/global-setup.ts for the Playwright dev server.
+export function e2eTestDatabaseUrl(testUrl: string): string {
+  const url = new URL(testUrl);
+  url.pathname = url.pathname.replace(/_test$/, "_e2e_test");
+  return url.toString();
+}
+
 export function maintenanceDatabaseUrl(testUrl: string): string {
   const url = new URL(testUrl);
   url.pathname = "/postgres";

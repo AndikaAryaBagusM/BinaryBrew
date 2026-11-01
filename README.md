@@ -88,6 +88,7 @@ changing one.
 | `npm run format` / `format:check` | Prettier write / check                                                     |
 | `npm test`                        | Vitest unit and integration tests (integration needs `db:up`)              |
 | `npm run test:unit`               | Unit tests only, no database (used by the pre-commit hook)                 |
+| `npm run test:e2e`                | Playwright, phone viewport; stop `npm run dev` first (needs `db:up`)       |
 | `npm run verify`                  | Typecheck, lint, format check and tests; run before every commit and merge |
 
 The pre-commit hook runs ESLint and Prettier on staged files, then typecheck and unit tests.

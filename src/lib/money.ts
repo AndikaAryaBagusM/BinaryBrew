@@ -71,3 +71,11 @@ export function formatRupiah(amount: number): string {
   const sign = amount < 0 ? "-" : "";
   return `${sign}Rp ${rupiahDigits.format(Math.abs(amount))}`;
 }
+
+// Option price change in C-02: "+Rp 5.000", "−Rp 2.000" (a true minus sign),
+// and nothing for a free option.
+export function formatPriceDelta(delta: number): string {
+  if (delta === 0) return "";
+  const amount = formatRupiah(Math.abs(delta));
+  return delta > 0 ? `+${amount}` : `−${amount}`;
+}

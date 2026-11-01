@@ -315,10 +315,24 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `menu.emptyCategory` | Belum ada menu di kategori ini |
 | `menu.orderedAt` | Dipesan {time} |
 | `menu.statusLink` | Lihat status |
+| `menu.required` | Wajib pilih |
+| `menu.chooseUpTo` | Pilih maks. {n} |
+| `menu.addToCart` | Tambah • {price} |
+| `menu.added` | {name} masuk keranjang |
 | `cart.title` | Keranjang |
 | `cart.empty` | Keranjang masih kosong |
 | `cart.taxIncluded` | Harga sudah termasuk pajak |
 | `cart.payQris` | Bayar dengan QRIS |
+| `cart.itemCount` | {n} item |
+| `cart.view` | Lihat keranjang |
+| `cart.remove` | Hapus {name} |
+| `cart.subtotal` | Subtotal |
+| `cart.serviceCharge` | Biaya layanan |
+| `cart.tax` | Pajak |
+| `cart.total` | Total |
+| `cart.backToMenu` | Kembali ke menu |
+| `cart.soldOutNote` | Hapus menu yang habis untuk lanjut |
+| `cart.full` | Keranjang sudah penuh, maksimal 30 menu |
 | `reco.title` | Sering dipesan bersama |
 | `reco.add` | Tambah |
 | `reco.continue` | Lanjut bayar |
@@ -372,6 +386,9 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `common.close` | Tutup |
 | `common.loading` | Memuat… |
 | `common.retry` | Coba lagi |
+| `common.quantity` | Jumlah |
+| `common.decrease` | Kurangi jumlah |
+| `common.increase` | Tambah jumlah |
 
 Money format: `Rp 22.000`. Time: 24-hour (`18.30`). Dates: `8 Okt 2026`.
 

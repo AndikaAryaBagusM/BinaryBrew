@@ -183,3 +183,19 @@ export function priceOrder(
     total: rates.taxInclusive ? base : base + taxAmount,
   };
 }
+
+// Live price in C-02 while the selection may still be incomplete: the base
+// price plus the deltas of the options chosen so far, times the quantity.
+// Equals priceOrder's line total once the selection is valid.
+export function previewLineTotal(
+  item: PricingItem,
+  optionIds: readonly string[],
+  quantity: number,
+): number {
+  const chosen = new Set(optionIds);
+  const deltas = item.modifierGroups
+    .flatMap((group) => group.options)
+    .filter((option) => chosen.has(option.id))
+    .reduce((sum, option) => sum + option.priceDelta, 0);
+  return Math.max(0, item.price + deltas) * quantity;
+}
