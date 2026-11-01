@@ -249,6 +249,25 @@ describe("createSelfOrder: refusals", () => {
     });
   });
 
+  it("refuses an order that totals zero, which QRIS cannot charge", async () => {
+    const [free] = await getDb()
+      .insert(schema.menuItems)
+      .values({
+        categoryId: catalog.categories.drinks.id,
+        name: "Air Putih " + newKey(),
+        price: 0,
+      })
+      .returning();
+    const request = input({
+      items: [{ menuItemId: free!.id, quantity: 1, modifierOptionIds: [] }],
+    });
+    await expect(createSelfOrder(request, { now: t0 })).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { reason: "zero_total" },
+    });
+    expect(await ordersOf(request.clientSession)).toEqual([]);
+  });
+
   it("refuses a rotated QR code and closed ordering (FR-CO-07)", async () => {
     await expect(
       createSelfOrder(input({ qrToken: catalog.rotatedQr.token }), { now: t0 }),
@@ -318,6 +337,7 @@ describe("idempotency key", () => {
     const again = await createSelfOrder(request, { now: minutes(1) });
     expect(again.replayed).toBe(true);
     expect(again.order).toEqual(first.order);
+    expect(again.payment).toEqual(first.payment);
     expect(await ordersOf(request.clientSession)).toHaveLength(1);
   });
 
@@ -377,16 +397,25 @@ describe("POST /api/public/orders", () => {
     return { qrToken, clientSession, items };
   };
 
-  it("answers 201 with the public token, total and expiry, never the internal id", async () => {
+  it("answers 201 with the public token, total, expiry and QRIS charge, never the order id", async () => {
     const response = await post(body(), newKey());
     expect(response.status).toBe(201);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const { data } = await response.json();
     expect(Object.keys(data).sort()).toEqual(
-      ["expiresAt", "publicToken", "status", "total"].sort(),
+      ["expiresAt", "payment", "publicToken", "status", "total"].sort(),
     );
     expect(data).toMatchObject({ status: "awaiting_payment", total: 88_000 });
     expect(Date.parse(data.expiresAt)).not.toBeNaN();
+    // FR-PM-01/02: the payment screen needs the QR, the exact amount and the deadline.
+    expect(Object.keys(data.payment).sort()).toEqual(
+      ["amount", "expiresAt", "id", "qrString"].sort(),
+    );
+    expect(data.payment).toMatchObject({
+      amount: 88_000,
+      expiresAt: data.expiresAt,
+    });
+    expect(data.payment.qrString).not.toBe("");
   });
 
   it("answers 200 with the same order when the same request is retried", async () => {

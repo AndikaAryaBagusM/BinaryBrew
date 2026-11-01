@@ -122,7 +122,7 @@ binary-brew/
 │  ├─ app/                    # Next.js routes (thin): (customer)/, (counter)/, (owner)/, board/, api/
 │  ├─ modules/
 │  │  ├─ orders/              # service.ts, repo.ts, schemas.ts, pricing.ts, state.ts
-│  │  ├─ payments/            # service.ts, provider.ts (interface), providers/mock.ts, webhook.ts
+│  │  ├─ payments/            # service.ts, repo.ts, provider.ts (interface), providers/mock.ts
 │  │  ├─ menu/                # items, categories, modifiers
 │  │  ├─ inventory/           # ingredients, recipes, movements, restock, count
 │  │  ├─ recommendations/     # scoring.ts, repo.ts, events.ts
@@ -171,7 +171,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | Method and path | Auth | Purpose |
 |---|---|---|
 | `GET /api/public/menu?qr=<token>` | Public | Categories, items, availability, modifier groups. Rejects invalid/rotated token. |
-| `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, payment (`qrString`, `amount`, `expiresAt`). |
+| `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, `status`, `total`, `expiresAt` and `payment` (`id`, `qrString`, `amount`, `expiresAt`); the charge is created after the order commits, and a retry with the same key creates it if that failed. |
 | `GET /api/public/orders/{publicToken}` | Token | Status, items, totals, queue number, receipt. |
 | `GET /api/stream/orders/{publicToken}` | Token | SSE: status changes for that order. |
 | `POST /api/public/recommendations` | Public + rate limit | Body: cart item ids + `clientSession`; returns up to 2 suggestions. |
@@ -183,8 +183,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `POST /api/webhooks/payments/{provider}` | Signature | Receive payment events. Always respond 2xx after safely recording the event. |
-| `POST /api/dev/mock-pay/{paymentId}` | Dev only | Mock provider: simulate "customer paid". Disabled when `PAYMENT_PROVIDER` is not `mock`. |
+| `POST /api/webhooks/payments/{provider}` | Signature | Receive payment events. 200 once the event is recorded and processed, duplicates and unknown references included; 401 for a bad signature; 404 for a provider that is not configured; 5xx if processing failed (nothing is kept, so the gateway retries). |
+| `POST /api/dev/mock-pay/{paymentId}` | Dev only, same origin | Mock provider: simulate "customer paid". 404 when `PAYMENT_PROVIDER` is not `mock`. |
 
 ### Auth
 
@@ -250,7 +250,7 @@ export interface PaymentProvider {
 ```
 
 - **Mock provider:** returns a fake QR string; `POST /api/dev/mock-pay/{paymentId}` sends the same internal event a real webhook would, through the same verification code path (signed with `PAYMENT_WEBHOOK_SECRET`).
-- **Webhook handler:** verify signature on the raw body → insert `payment_events` → process in a transaction (schema doc §5.2) → respond 200. Unknown references return 200 and are logged (so the gateway stops retrying) but raise an alert.
+- **Webhook handler:** verify signature on the raw body → insert `payment_events` and process it in one transaction (schema doc §5.2) → respond 200. Unknown references return 200 and are logged (so the gateway stops retrying) but raise an alert.
 - **Never trust the browser** about payment: the status page only reflects server state.
 - **Real gateway (Phase 4):** write one adapter that implements the interface; test in the gateway's sandbox, using a tunnel (such as cloudflared) so webhooks can reach the local app.
 - **Manual fallback:** static-QR confirmation records `qris_static_manual` with the staff member, reference and note (schema: `payments`), and always writes an audit log.

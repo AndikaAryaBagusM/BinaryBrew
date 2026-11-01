@@ -10,6 +10,7 @@ import * as repo from "./repo";
 export const auditActions = [
   "device.register",
   "elevation.grant",
+  "refund.request",
   "setting.update",
 ] as const;
 export type AuditAction = (typeof auditActions)[number];

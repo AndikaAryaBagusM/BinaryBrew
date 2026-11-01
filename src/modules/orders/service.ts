@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { getDb } from "@/db/client";
+import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
 import { newPublicToken } from "@/lib/ids";
 import { businessDate } from "@/lib/time";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
 import { getOrderableItems, requireOrderingQr } from "@/modules/menu/service";
+import {
+  ensureQrisCharge,
+  type PaymentSummary,
+} from "@/modules/payments/service";
 import { getSettings } from "@/modules/settings/service";
 import { type CartLine, priceOrder } from "./pricing";
 import * as repo from "./repo";
@@ -55,11 +59,33 @@ function created(row: OrderRow): CreatedOrder {
   return { ...row, expiresAt: row.expiresAt! };
 }
 
-// Creates a self-order awaiting payment, or returns the order already created
-// with the same idempotency key by this client (replayed: true).
+// Creates a self-order awaiting payment with its QRIS charge, or returns the
+// order already created with the same idempotency key by this client
+// (replayed: true). payment is null only for a replayed order that is no
+// longer awaiting payment and never got a charge.
 export async function createSelfOrder(
   input: SelfOrderInput,
   { now = new Date() }: { now?: Date } = {},
+): Promise<{
+  order: CreatedOrder;
+  payment: PaymentSummary | null;
+  replayed: boolean;
+}> {
+  const { order, replayed } = await insertSelfOrder(input, now);
+  // After commit, so the gateway call never runs while locks are held. A
+  // retry with the same key creates the charge if this step failed.
+  const payment = await ensureQrisCharge({
+    orderId: order.id,
+    orderStatus: order.status,
+    amount: order.total,
+    expiresAt: order.expiresAt,
+  });
+  return { order, payment, replayed };
+}
+
+async function insertSelfOrder(
+  input: SelfOrderInput,
+  now: Date,
 ): Promise<{ order: CreatedOrder; replayed: boolean }> {
   // Read before the transaction, so it never waits for a second connection
   // while holding the client lock.
@@ -108,6 +134,12 @@ export async function createSelfOrder(
       taxInclusive: settings.tax_inclusive,
       serviceChargeBps: settings.service_charge_bps,
     });
+    // A QRIS charge must be more than zero (payments_amount_check).
+    if (priced.total <= 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { reason: "zero_total" },
+      });
+    }
 
     const order = await repo.insertOrder(
       {
@@ -162,4 +194,48 @@ export async function createSelfOrder(
 
     return { order: created(order), replayed: false };
   });
+}
+
+// Payment side of Schema §5.2. The payments module calls these inside its
+// transaction; orders are locked before payments.
+
+export type LockedOrder = NonNullable<
+  Awaited<ReturnType<typeof repo.lockOrder>>
+>;
+
+export function lockOrderForPayment(
+  orderId: string,
+  db: DbExecutor,
+): Promise<LockedOrder | undefined> {
+  return repo.lockOrder(orderId, db);
+}
+
+// Late payment (FR-PM-07): every ordered item must still be orderable.
+export async function orderItemsStillAvailable(
+  orderId: string,
+  db: DbExecutor,
+): Promise<boolean> {
+  const ids = [...new Set(await repo.selectOrderMenuItemIds(orderId, db))];
+  const items = await getOrderableItems(ids, db);
+  return items.length === ids.length && items.every((i) => i.isAvailable);
+}
+
+// Marks the order paid with the next queue number of its business day.
+// order.paid is emitted when the transaction commits.
+export async function markOrderPaid(
+  order: LockedOrder,
+  now: Date,
+  db: DbExecutor,
+): Promise<number> {
+  const queueNumber = await repo.markOrderPaid(
+    order.id,
+    order.businessDate,
+    now,
+    db,
+  );
+  await repo.notifyOrderEvents(
+    { orderId: order.id, status: "paid", queueNumber },
+    db,
+  );
+  return queueNumber;
 }
