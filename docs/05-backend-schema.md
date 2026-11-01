@@ -617,7 +617,7 @@ All multi-step changes happen inside one database transaction. Lock rows in a fi
 2. Check the client's open unpaid orders (BR-11).
 3. Load menu items, modifier options and settings; **ignore any prices from the client**.
 4. Validate modifier min/max per group and availability (`v_menu_item_availability` plus modifier ingredient deltas against `ingredients.stock_qty`). If anything is unavailable, abort with the list of items.
-5. Calculate `subtotal`, `service_charge = round(subtotal × service_charge_bps / 10000)`, `total = subtotal + service_charge`, `tax_amount = round(total × tax_rate_bps / (10000 + tax_rate_bps))` (inclusive tax).
+5. Calculate `subtotal`, `service_charge = round(subtotal × service_charge_bps / 10000)`, `total = subtotal + service_charge`, `tax_amount = round(total × tax_rate_bps / (10000 + tax_rate_bps))` (inclusive tax). If `tax_inclusive` is false, tax is added on top: `tax_amount = round((subtotal + service_charge) × tax_rate_bps / 10000)`, `total = subtotal + service_charge + tax_amount`. Rounding is half-up (`src/lib/money.ts`). A line whose unit price plus option deltas is below zero is refused.
 6. Insert `orders` (status `awaiting_payment`, `expires_at = now() + expiry`, new `public_token`, `business_date`), `order_items`, `order_item_modifiers` (with snapshots).
 7. Call the payment provider to create the charge; insert `payments` (`pending`, `qris_dynamic`). If the provider call fails, roll back.
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   divideRoundHalfUp,
+  exclusiveTaxAmount,
   formatRupiah,
   inclusiveTaxAmount,
   serviceChargeAmount,
@@ -71,6 +72,23 @@ describe("inclusiveTaxAmount (Schema §5.1)", () => {
 
   it("rejects a non-integer total", () => {
     expect(() => inclusiveTaxAmount(100.5, 1_100)).toThrow(RangeError);
+  });
+});
+
+describe("exclusiveTaxAmount (tax_inclusive = false)", () => {
+  it.each([
+    [42_000, 0, 0],
+    [42_000, 1_100, 4_620], // 11 %
+    [22_000, 1_100, 2_420],
+    [12_345, 1_100, 1_358], // 1357.95 → 1358
+    [50, 1_000, 5],
+    [5, 1_000, 1], // 0.5 → 1
+  ])("base %i at %i bps = %i", (base, bps, expected) => {
+    expect(exclusiveTaxAmount(base, bps)).toBe(expected);
+  });
+
+  it("rejects a negative base", () => {
+    expect(() => exclusiveTaxAmount(-1, 1_100)).toThrow(RangeError);
   });
 });
 
