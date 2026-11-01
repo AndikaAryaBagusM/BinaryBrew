@@ -41,7 +41,8 @@ async function SignIn() {
 }
 
 function NotRegistered() {
-  // Until P1-13 lets the owner register devices (docs/02, dev routes).
+  // The owner registers a browser on O-13; in development the seeded
+  // counter device is one click away (docs/02, dev routes).
   const dev =
     process.env.NODE_ENV === "development" &&
     Boolean(process.env.SEED_COUNTER_DEVICE_TOKEN);

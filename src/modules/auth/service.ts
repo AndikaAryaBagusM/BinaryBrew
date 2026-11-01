@@ -364,6 +364,96 @@ export async function registerDevice(
   return { deviceToken, deviceId: device.id, name: device.name };
 }
 
+// O-13 basic (FR-OW-05): users and devices for the owner. PINs and hashes
+// never leave this module, and never reach the audit log.
+
+export type UserSummary = {
+  id: string;
+  name: string;
+  role: UserRole;
+  isActive: boolean;
+  lastActiveAt: Date | null;
+};
+
+export async function listUsers(
+  actor: SessionUser | null,
+): Promise<UserSummary[]> {
+  requireRole(actor, ["owner"]);
+  return repo.listUsersWithActivity();
+}
+
+// Staff and barista only: the shop has one owner (from the seed). Names are
+// unique among active users, so the S-01 name grid stays unambiguous.
+export async function createUser(
+  actor: SessionUser | null,
+  input: { name: string; role: "staff" | "barista"; pin: string },
+  { now = new Date() }: Clock = {},
+) {
+  const owner = requireRole(actor, ["owner"]);
+  const pinHash = await hashSecret(input.pin);
+  return getDb().transaction(async (tx) => {
+    await repo.lockUserNames(tx);
+    if (await repo.findActiveUserByName(input.name, tx)) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const user = await repo.insertUser({ ...input, pinHash, now }, tx);
+    await audit(
+      {
+        action: "user.create",
+        actor: owner,
+        entity: { type: "user", id: user.id },
+        metadata: { name: user.name, role: user.role },
+      },
+      { db: tx, now },
+    );
+    return user;
+  });
+}
+
+// A forgotten PIN or a lockout: the owner sets a new one. The user's open
+// sessions end, so a tablet left signed in asks for the new PIN.
+export async function resetPin(
+  actor: SessionUser | null,
+  input: { userId: string; pin: string },
+  { now = new Date() }: Clock = {},
+) {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(input.userId)) throw new AppError("NOT_FOUND");
+  const pinHash = await hashSecret(input.pin);
+  await getDb().transaction(async (tx) => {
+    const user = await repo.setUserPin(input.userId, pinHash, now, tx);
+    if (!user) throw new AppError("NOT_FOUND");
+    const ended = await repo.revokeSessionsOfUser(user.id, now, tx);
+    await audit(
+      {
+        action: "user.pin_reset",
+        actor: owner,
+        entity: { type: "user", id: user.id },
+        metadata: { name: user.name, sessionsEnded: ended },
+      },
+      { db: tx, now },
+    );
+  });
+  logger.info({ event: "auth.pin_reset", userId: input.userId });
+}
+
+export type DeviceSummary = {
+  id: string;
+  name: string;
+  kind: "counter" | "kitchen" | "other";
+  registeredAt: Date;
+  registeredByName: string | null;
+  lastSeenAt: Date | null;
+  revokedAt: Date | null;
+};
+
+export async function listDevices(
+  actor: SessionUser | null,
+): Promise<DeviceSummary[]> {
+  requireRole(actor, ["owner"]);
+  return repo.listDevicesWithRegistrar();
+}
+
 // Owner PIN → one elevation for one scope, valid 60 s and one use (Tech §9,
 // Flow §8). A signed-in owner re-enters their own PIN.
 export async function elevate(

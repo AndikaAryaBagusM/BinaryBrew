@@ -1,8 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Button } from "@/components/button";
+import { SelectField, TextField } from "@/components/field";
 import { PinPad } from "@/components/pin-pad";
 import { StatusChip, type OrderChipStatus } from "@/components/status-chip";
+import { Switch } from "@/components/switch";
 
 function html(node: React.ReactElement): string {
   return renderToStaticMarkup(node);
@@ -98,5 +100,59 @@ describe("PinPad", () => {
   it("disables every key while locked", () => {
     const locked = html(<PinPad disabled onComplete={() => {}} />);
     expect(locked.match(/<button[^>]* disabled=""/g)).toHaveLength(12);
+  });
+});
+
+describe("Switch", () => {
+  it("is a button with the switch role and its state", () => {
+    const on = html(<Switch checked aria-label="Promosikan Latte" />);
+    expect(on).toMatch(
+      /^<button type="button" role="switch" aria-checked="true"/,
+    );
+    expect(on).toContain('aria-label="Promosikan Latte"');
+    expect(on).toContain("bg-brand");
+    expect(html(<Switch checked={false} aria-label="x" />)).toContain(
+      'aria-checked="false"',
+    );
+  });
+});
+
+describe("Field", () => {
+  it("labels the input and ties the helper to it", () => {
+    const markup = html(
+      <TextField id="price" label="Harga" helper="Dalam rupiah" prefix="Rp" />,
+    );
+    expect(markup).toContain('<label for="price"');
+    expect(markup).toContain('aria-describedby="price-help"');
+    expect(markup).not.toContain("aria-invalid");
+  });
+
+  it("marks an error and reads it before the helper", () => {
+    const markup = html(
+      <TextField id="pin" label="PIN" helper="4–6 angka" error="PIN salah" />,
+    );
+    expect(markup).toContain('aria-invalid="true"');
+    expect(markup).toContain('aria-describedby="pin-error pin-help"');
+    expect(markup).toContain("PIN salah");
+    expect(markup).toContain("border-danger");
+  });
+
+  it("renders a labelled select with its options", () => {
+    const markup = html(
+      <SelectField
+        id="expiry"
+        label="Batas waktu"
+        value="10"
+        onChange={() => {}}
+        options={[
+          { value: "5", label: "5 menit" },
+          { value: "10", label: "10 menit" },
+        ]}
+      />,
+    );
+    expect(markup).toContain('<label for="expiry"');
+    expect(markup).toContain(
+      '<option value="10" selected="">10 menit</option>',
+    );
   });
 });

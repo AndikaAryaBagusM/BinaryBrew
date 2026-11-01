@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { businessDate, formatDate, formatTime, parseCutoff } from "@/lib/time";
+import {
+  businessDate,
+  formatDate,
+  formatLastActive,
+  formatTime,
+  parseCutoff,
+} from "@/lib/time";
 import { businessDateCases } from "../fixtures/business-date-cases";
 
 describe("businessDate (BR-14)", () => {
@@ -47,5 +53,28 @@ describe("display formats (Design §9)", () => {
   it("formats dates as day, short Indonesian month, year", () => {
     expect(formatDate(new Date("2026-10-08T05:00:00Z"))).toBe("8 Okt 2026");
     expect(formatDate(new Date("2026-10-08T17:30:00Z"))).toBe("9 Okt 2026");
+  });
+});
+
+describe("formatLastActive (O-13)", () => {
+  // 1 Nov 2026 10.00 in Jakarta (UTC+7).
+  const now = new Date("2026-11-01T03:00:00Z");
+
+  it("shows the time for today, in shop time", () => {
+    expect(
+      formatLastActive(new Date("2026-10-31T17:05:00Z"), now, "kemarin"),
+    ).toBe("00.05");
+  });
+
+  it("says yesterday for the day before", () => {
+    expect(
+      formatLastActive(new Date("2026-10-31T16:59:00Z"), now, "kemarin"),
+    ).toBe("kemarin");
+  });
+
+  it("shows the date for older days", () => {
+    expect(
+      formatLastActive(new Date("2026-10-29T05:00:00Z"), now, "kemarin"),
+    ).toBe(formatDate(new Date("2026-10-29T05:00:00Z")));
   });
 });

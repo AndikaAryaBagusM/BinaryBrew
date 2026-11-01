@@ -273,7 +273,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 |---|---|
 | O-01 | Centred card: email, password, "Masuk". Rate-limit message on repeated failures. |
 | O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
-| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. |
+| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column and no stock-based statuses yet; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
 | O-04 | Group list with options; per option: name, price delta, ingredient deltas (Phase 2). |
 | O-05 | Table: ingredient, unit, stock, minimum, average cost, status chip (Aman, Menipis, Habis, Minus). |
 | O-06 | Ingredient rows with quantity; live HPP and margin preview; warning if an ingredient has no cost yet. |
@@ -283,8 +283,8 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 | O-10 | Table and a simple trend per ingredient; highlights the largest variances. |
 | O-11 | Controls for weights and thresholds; promoted items list; performance table (shown, accepted, acceptance %); "Hitung ulang sekarang". |
 | O-12 | Searchable order list; detail with receipt; refund requests with "Tandai sudah dikembalikan". |
-| O-13 | User table (name, role, active); reset PIN; devices list with revoke and "Daftarkan perangkat ini". |
-| O-14 | Grouped form: Toko, Pajak dan biaya, Pembayaran, Pesanan, Rekomendasi. |
+| O-13 | User table (name, role, active); reset PIN; devices list with revoke and "Daftarkan perangkat ini". Phase 1 (P1-13): new users are staff or barista (the one owner comes from the seed); PINs are typed twice; the device list is read-only apart from "Daftarkan perangkat ini" (revoke and deactivate come with P3-05). |
+| O-14 | Grouped form: Toko, Pajak dan biaya, Pembayaran, Pesanan, Rekomendasi. One "Simpan perubahan" saves only what changed. Phase 1 (P1-13): the time zone is fixed and "Terima tunai" is shown off and disabled (D11); the recommendation weights and thresholds come with P3-05. |
 | O-15 | Filterable table (date, actor, action); expandable metadata. |
 | O-16 | List of QR tokens with label, status, preview and download; rotate requires confirmation. |
 
@@ -386,6 +386,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
 | `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
 | `error.orderStatusChanged` | Status pesanan sudah berubah. Daftar diperbarui. |
+| `error.nameTaken` | Nama ini sudah dipakai. Pilih nama lain. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
@@ -508,6 +509,142 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `board.more` | +{n} lagi |
 | `owner.lowStock` | Stok menipis |
 | `owner.noRecipe` | Resep belum ada |
+| `owner.loginTitle` | Masuk sebagai pemilik |
+| `owner.email` | Email |
+| `owner.password` | Kata sandi |
+| `owner.loginSubmit` | Masuk |
+| `owner.loginStaffNote` | Staf masuk dengan PIN di tablet kasir |
+| `owner.loginLimitedTitle` | Terlalu banyak percobaan |
+| `owner.loginLimitedBody` | Untuk keamanan, coba lagi dalam 15 menit. Lupa kata sandi? Hubungi pengembang aplikasi. |
+| `owner.navLabel` | Menu pemilik |
+| `owner.navSectionMenu` | Menu |
+| `owner.navSectionOperations` | Operasional |
+| `owner.navMenu` | Menu |
+| `owner.navUsers` | Pengguna & perangkat |
+| `owner.navSettings` | Pengaturan |
+| `owner.logout` | Keluar |
+| `owner.search` | Cari |
+| `owner.save` | Simpan |
+| `owner.saveChanges` | Simpan perubahan |
+| `owner.active` | Aktif |
+| `owner.inactive` | Nonaktif |
+| `owner.nameRequired` | Nama wajib diisi |
+| `owner.colActions` | Tindakan |
+| `owner.colStatus` | Status |
+| `owner.colName` | Nama |
+| `owner.colLastActive` | Terakhir aktif |
+| `owner.yesterday` | kemarin |
+| `owner.minutes` | {n} menit |
+| `owner.months` | {n} bulan |
+| `owner.menuTitle` | Menu |
+| `owner.menuCount` | {items} menu · {categories} kategori |
+| `owner.menuSearchPlaceholder` | Cari menu… |
+| `owner.menuEmpty` | Tidak ada menu yang cocok. |
+| `owner.addItem` | Tambah menu |
+| `owner.editItem` | Ubah {name} |
+| `owner.editItemTitle` | Ubah menu |
+| `owner.colItem` | Menu |
+| `owner.colCategory` | Kategori |
+| `owner.colPrice` | Harga |
+| `owner.promote` | Promosikan |
+| `owner.promoteItem` | Promosikan {name} |
+| `owner.promoteHelp` | Menu ini lebih sering muncul di rekomendasi. |
+| `owner.markSoldOut` | Tandai habis |
+| `owner.markSoldOutItem` | Tandai {name} habis |
+| `owner.soldOutManualBy` | Manual · {name} {time} |
+| `owner.soldOutManual` | Manual |
+| `owner.categoryInactive` | Kategori nonaktif |
+| `owner.itemName` | Nama menu |
+| `owner.priceHelp` | Harga jual dalam rupiah, tanpa desimal |
+| `owner.priceInvalid` | Isi harga dalam rupiah, contoh 22.000 |
+| `owner.itemDescription` | Deskripsi (opsional) |
+| `owner.itemDescriptionHelp` | Tampil di bawah nama menu, maks. 200 karakter |
+| `owner.itemActive` | Tampil di menu |
+| `owner.itemActiveHelp` | Nonaktif menyembunyikan menu dari pelanggan dan kasir. Riwayat pesanan tetap tersimpan. |
+| `owner.categoryOptionInactive` | {name} (nonaktif) |
+| `owner.categories` | Kategori |
+| `owner.categoriesHelp` | Kategori nonaktif menyembunyikan semua menunya dari pelanggan dan kasir. |
+| `owner.categoryName` | Nama kategori |
+| `owner.categoryItemCount` | {n} menu |
+| `owner.categoryActive` | Kategori {name} aktif |
+| `owner.newCategory` | Kategori baru |
+| `owner.addCategory` | Tambah |
+| `owner.usersTitle` | Pengguna & perangkat |
+| `owner.usersSubtitle` | Siapa yang boleh masuk, dan di perangkat mana |
+| `owner.addUser` | Tambah pengguna |
+| `owner.addUserHelp` | Staf dan barista masuk dengan PIN di tablet terdaftar. |
+| `owner.userAdded` | {name} sudah ditambahkan dan bisa masuk dengan PIN. |
+| `owner.colRole` | Peran |
+| `owner.colSignIn` | Masuk dengan |
+| `owner.signInOwner` | Email + PIN |
+| `owner.signInPin` | PIN · tablet terdaftar |
+| `owner.resetPin` | Reset PIN |
+| `owner.resetPinFor` | Reset PIN {name} |
+| `owner.resetPinHelp` | Sesi {name} yang masih terbuka akan berakhir, lalu {name} masuk dengan PIN baru. |
+| `owner.pinReset` | PIN {name} sudah diganti. |
+| `owner.savePin` | Simpan PIN |
+| `owner.pinNew` | PIN baru |
+| `owner.pinRepeat` | Ulangi PIN |
+| `owner.pinHelp` | 4–6 angka |
+| `owner.pinInvalid` | PIN harus 4–6 angka |
+| `owner.pinMismatch` | PIN tidak sama |
+| `owner.devicesTitle` | Perangkat terdaftar |
+| `owner.devicesEmpty` | Belum ada perangkat terdaftar. |
+| `owner.registerThisDevice` | Daftarkan perangkat ini |
+| `owner.registerDeviceHelp` | Browser ini menjadi tablet kasir: staf bisa masuk dengan PIN di sini. |
+| `owner.register` | Daftarkan |
+| `owner.deviceName` | Nama perangkat |
+| `owner.deviceNamePlaceholder` | Contoh: Tablet kasir |
+| `owner.deviceRegistered` | {name} sudah terdaftar. |
+| `owner.openCounterLogin` | Buka halaman masuk kasir |
+| `owner.colDevice` | Perangkat |
+| `owner.colKind` | Jenis |
+| `owner.colRegistered` | Didaftarkan |
+| `owner.registeredBy` | {date} · oleh {name} |
+| `owner.deviceCounter` | Kasir |
+| `owner.deviceKitchen` | Dapur |
+| `owner.deviceOther` | Lainnya |
+| `owner.deviceRevoked` | Dicabut |
+| `owner.boardNoteTitle` | Layar antrean TV tidak perlu didaftarkan |
+| `owner.boardNoteBody` | Halaman /board hanya menampilkan nomor pesanan, tanpa data pribadi. |
+| `owner.settingsTitle` | Pengaturan |
+| `owner.settingsSubtitle` | Berlaku untuk semua perangkat. Setiap perubahan tercatat di log audit. |
+| `owner.settingsSaved` | Pengaturan tersimpan. |
+| `owner.percentInvalid` | Isi angka 0–100, contoh 11 atau 12,5 |
+| `owner.settingsShop` | Toko |
+| `owner.shopName` | Nama toko |
+| `owner.timezone` | Zona waktu |
+| `owner.timezoneWib` | Asia/Jakarta (WIB) |
+| `owner.cutoff` | Hari bisnis berganti pukul |
+| `owner.cutoffHelp` | Pesanan sebelum {time} ikut hari sebelumnya |
+| `owner.orderingEnabled` | Terima pesanan lewat QR |
+| `owner.orderingEnabledHelp` | Matikan saat tutup atau kewalahan. Pelanggan melihat layar "Pemesanan sedang ditutup". |
+| `owner.settingsTax` | Pajak dan biaya |
+| `owner.taxRate` | Tarif pajak (PB1) |
+| `owner.taxRateHelp` | Isi jika toko memungut PB1 |
+| `owner.serviceCharge` | Biaya layanan |
+| `owner.serviceChargeHelp` | Ditambahkan ke total |
+| `owner.taxInclusive` | Harga menu sudah termasuk pajak |
+| `owner.taxInclusiveOn` | Total = subtotal + biaya layanan. Pajak dihitung dari dalam harga. |
+| `owner.taxInclusiveOff` | Total = subtotal + biaya layanan + pajak. Pajak ditambahkan di atas harga. |
+| `owner.settingsPayment` | Pembayaran |
+| `owner.qrisDynamic` | QRIS dinamis per pesanan |
+| `owner.qrisGatewayMock` | Gateway: mode sandbox (mock) · webhook terverifikasi |
+| `owner.qrisGateway` | Gateway terhubung · webhook terverifikasi |
+| `owner.paymentExpiry` | Batas waktu pembayaran |
+| `owner.paymentExpiryHelp` | Lewat dari ini pesanan kedaluwarsa dan stok dilepas |
+| `owner.cash` | Terima tunai |
+| `owner.cashHelp` | Nonaktif: toko hanya menerima QRIS (D11). |
+| `owner.manualPin` | Konfirmasi manual butuh PIN pemilik |
+| `owner.manualPinHelp` | Untuk pembayaran lewat QR kios. Jika dimatikan, staf bisa konfirmasi sendiri dan tetap tercatat. |
+| `owner.settingsOrders` | Pesanan |
+| `owner.autoComplete` | Selesai otomatis setelah siap |
+| `owner.autoCompleteHelp` | Jika tidak ditandai diambil |
+| `owner.retention` | Simpan riwayat pesanan |
+| `owner.retentionHelp` | Setelah itu dianonimkan |
+| `owner.settingsReco` | Rekomendasi |
+| `owner.lowMargin` | Batas margin rendah |
+| `owner.lowMarginHelp` | Menu di bawah batas ini ditandai di laporan HPP & margin |
 | `chip.awaiting` | Menunggu bayar |
 | `chip.paid` | Baru |
 | `chip.preparing` | Disiapkan |
