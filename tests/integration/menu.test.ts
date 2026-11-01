@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { GET as menuGet } from "@/app/api/public/menu/route";
@@ -136,6 +136,33 @@ describe("getPublicMenu (FR-CO-01, FR-CO-02)", () => {
       await expect(getPublicMenu(token)).rejects.toMatchObject({
         code: "QR_INVALID",
       });
+    }
+  });
+
+  it("includes the current tax and service charge rates for the cart total", async () => {
+    expect((await getPublicMenu(catalog.qr.token)).pricing).toEqual({
+      taxRateBps: 0,
+      taxInclusive: true,
+      serviceChargeBps: 0,
+    });
+    await getDb()
+      .insert(schema.settings)
+      .values([
+        { key: "tax_rate_bps", value: 1100 },
+        { key: "service_charge_bps", value: 500 },
+      ]);
+    try {
+      expect((await getPublicMenu(catalog.qr.token)).pricing).toEqual({
+        taxRateBps: 1100,
+        taxInclusive: true,
+        serviceChargeBps: 500,
+      });
+    } finally {
+      await getDb()
+        .delete(schema.settings)
+        .where(
+          inArray(schema.settings.key, ["tax_rate_bps", "service_charge_bps"]),
+        );
     }
   });
 

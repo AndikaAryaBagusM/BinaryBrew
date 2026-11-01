@@ -5,6 +5,7 @@ import {
   type CartLine,
   MAX_LINES,
   MAX_QUANTITY,
+  previewLineTotal,
   priceOrder,
   type PricingItem,
   type PricingRates,
@@ -398,5 +399,20 @@ describe("selectionProblems (C-02 blocks Add until this is empty)", () => {
     expect(selectionProblems(croissant, ["o-large"])).toEqual([
       { optionId: "o-large", reason: "unknown_option" },
     ]);
+  });
+});
+
+describe("previewLineTotal (C-02 live price)", () => {
+  it("equals priceOrder's line total for a valid selection", () => {
+    const options = ["o-large", "o-shot", "o-oat"];
+    const priced = priceOrder([line(kopiSusu, 3, options)], catalog, noTax);
+    expect(previewLineTotal(kopiSusu, options, 3)).toBe(
+      priced.lines[0]!.lineTotal,
+    );
+  });
+
+  it("prices an incomplete selection from what is chosen so far", () => {
+    expect(previewLineTotal(kopiSusu, ["o-shot"], 2)).toBe(54_000);
+    expect(previewLineTotal(esTeh, [], 1)).toBe(15_000);
   });
 });

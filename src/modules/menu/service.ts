@@ -1,5 +1,6 @@
 import { getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
+import type { PricingRates } from "@/modules/orders/pricing";
 import { getSettings } from "@/modules/settings/service";
 import * as repo from "./repo";
 
@@ -34,6 +35,8 @@ export type PublicMenuItem = {
 export type PublicMenu = {
   shopName: string;
   table: string;
+  // Current rates, so the cart shows the total the server will charge.
+  pricing: PricingRates;
   categories: { id: string; name: string; items: PublicMenuItem[] }[];
 };
 
@@ -45,7 +48,13 @@ export async function getPublicMenu(qrToken: string): Promise<PublicMenu> {
 
   const [qr, settings] = await Promise.all([
     repo.selectActiveQr(qrToken),
-    getSettings(["shop_name", "ordering_enabled"]),
+    getSettings([
+      "shop_name",
+      "ordering_enabled",
+      "tax_rate_bps",
+      "tax_inclusive",
+      "service_charge_bps",
+    ]),
   ]);
   // A rotated or unknown code (Flow E15) is reported before "closed" (E9).
   if (!qr) throw new AppError("QR_INVALID");
@@ -74,6 +83,11 @@ export async function getPublicMenu(qrToken: string): Promise<PublicMenu> {
       return {
         shopName: settings.shop_name,
         table: qr.label,
+        pricing: {
+          taxRateBps: settings.tax_rate_bps,
+          taxInclusive: settings.tax_inclusive,
+          serviceChargeBps: settings.service_charge_bps,
+        },
         categories: categories.map((category) => ({
           id: category.id,
           name: category.name,

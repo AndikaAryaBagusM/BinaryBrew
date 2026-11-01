@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { EdgeState } from "@/components/edge-state";
-import { MenuItemCard } from "@/components/menu-item-card";
-import { t } from "@/i18n";
-import { isAppError } from "@/lib/errors";
-import { getPublicMenu, type PublicMenu } from "@/modules/menu/service";
 import { CategoryTabs } from "./category-tabs";
+import { loadMenu } from "./load-menu";
+import { MenuSections } from "./menu-sections";
 import { MenuSkeleton } from "./menu-skeleton";
 import { MyOrders } from "./my-orders";
 
@@ -27,22 +24,10 @@ export default function MenuPage({ params }: PageProps<"/o/[qrToken]">) {
 }
 
 async function Menu({ qrToken }: { qrToken: string }) {
-  let menu: PublicMenu;
-  try {
-    menu = await getPublicMenu(qrToken);
-  } catch (error) {
-    if (isAppError(error) && error.code === "QR_INVALID") {
-      return <EdgeState variant="qrInvalid" />;
-    }
-    if (isAppError(error) && error.code === "ORDERING_CLOSED") {
-      return <EdgeState variant="closed" />;
-    }
-    throw error;
-  }
-  return <MenuView menu={menu} />;
-}
+  const result = await loadMenu(qrToken);
+  if ("edgeState" in result) return result.edgeState;
+  const { menu } = result;
 
-function MenuView({ menu }: { menu: PublicMenu }) {
   return (
     <div className="mx-auto flex w-full max-w-120 flex-1 flex-col">
       <div className="sticky top-0 z-10 bg-bg">
@@ -57,35 +42,7 @@ function MenuView({ menu }: { menu: PublicMenu }) {
           categories={menu.categories.map(({ id, name }) => ({ id, name }))}
         />
       </div>
-      <main className="flex flex-col gap-6 px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-        {menu.categories.map((category) => (
-          <section
-            key={category.id}
-            id={`kategori-${category.id}`}
-            aria-labelledby={`judul-${category.id}`}
-            // scroll-mt clears the sticky header and tabs; the last section
-            // is tall enough to scroll under them, so its tab can be current.
-            className="scroll-mt-28 last:min-h-[calc(100dvh-7rem)]"
-          >
-            <h2 id={`judul-${category.id}`} className="mb-3 text-h2 text-ink">
-              {category.name}
-            </h2>
-            {category.items.length === 0 ? (
-              <p className="text-body text-ink-muted">
-                {t("menu.emptyCategory")}
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {category.items.map((item) => (
-                  <li key={item.id}>
-                    <MenuItemCard item={item} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ))}
-      </main>
+      <MenuSections menu={menu} qrToken={qrToken} />
     </div>
   );
 }
