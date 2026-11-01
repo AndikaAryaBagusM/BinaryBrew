@@ -35,6 +35,10 @@ function messageFor(error: AppError): string {
       return t("auth.elevationRequired");
     case "RATE_LIMITED":
       return t("auth.rateLimited");
+    case "QR_INVALID":
+      return t("error.qrInvalid");
+    case "ORDERING_CLOSED":
+      return t("error.orderingClosed");
     case "ITEM_SOLD_OUT":
       return t("error.itemSoldOut");
     default:

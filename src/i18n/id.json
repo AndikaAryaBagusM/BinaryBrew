@@ -2,6 +2,12 @@
   "menu.title": "Menu",
   "menu.soldOut": "Habis",
   "menu.recommended": "Rekomendasi",
+  "menu.myOrders": "Pesanan saya",
+  "menu.addItem": "Tambah {name}",
+  "menu.categoriesLabel": "Kategori menu",
+  "menu.emptyCategory": "Belum ada menu di kategori ini",
+  "menu.orderedAt": "Dipesan {time}",
+  "menu.statusLink": "Lihat status",
   "cart.title": "Keranjang",
   "cart.empty": "Keranjang masih kosong",
   "cart.taxIncluded": "Harga sudah termasuk pajak",
@@ -23,6 +29,11 @@
   "error.priceChanged": "Harga diperbarui",
   "error.generic": "Ada gangguan, coba lagi",
   "error.validation": "Data yang dikirim tidak valid",
+  "error.orderingClosed": "Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir.",
+  "edge.qrInvalid.title": "Kode QR sudah tidak berlaku",
+  "edge.qrInvalid.text": "Silakan scan kode di kasir",
+  "edge.closed.title": "Pemesanan sedang ditutup",
+  "edge.closed.text": "Kamu tetap bisa pesan langsung di kasir",
   "auth.loginFailed": "Email atau kata sandi salah",
   "auth.signInRequired": "Silakan masuk terlebih dahulu",
   "auth.forbidden": "Anda tidak punya akses untuk tindakan ini",
@@ -53,5 +64,6 @@
   "pin.keypad": "Papan PIN",
   "pin.progress": "{entered} dari {total} digit",
   "common.close": "Tutup",
-  "common.loading": "Memuat…"
+  "common.loading": "Memuat…",
+  "common.retry": "Coba lagi"
 }
