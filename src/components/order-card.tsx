@@ -9,6 +9,7 @@ import { formatQueueNumber } from "@/lib/order-display";
 // Figma "Order card" (6:210), Counter queue: number, status, age, items and
 // one primary action, the next status step (Design §6.2). New orders get a
 // 3 px accent border for 5 s; "Paling lama" marks the oldest unfinished one.
+// With onOpen, the rest of the card is one large target that opens S-06.
 export type OrderCardProps = {
   queueNumber: number;
   status: QueueStatus;
@@ -18,6 +19,7 @@ export type OrderCardProps = {
   oldest?: boolean;
   busy?: boolean;
   onAdvance: () => void;
+  onOpen?: () => void;
 };
 
 export function OrderCard({
@@ -29,6 +31,7 @@ export function OrderCard({
   oldest = false,
   busy = false,
   onAdvance,
+  onOpen,
 }: OrderCardProps) {
   const number = formatQueueNumber(queueNumber);
   const step = nextStatus(status);
@@ -36,10 +39,18 @@ export function OrderCard({
     <article
       aria-label={t("counter.orderLabel", { number })}
       className={cn(
-        "flex flex-col gap-3 rounded-[14px] bg-surface p-4 shadow-card",
+        "relative flex flex-col gap-3 rounded-[14px] bg-surface p-4 shadow-card",
         isNew ? "border-3 border-accent" : "border border-line",
       )}
     >
+      {onOpen && (
+        <button
+          type="button"
+          aria-label={t("counter.openDetail", { number })}
+          onClick={onOpen}
+          className="focus-ring absolute inset-0 cursor-pointer rounded-[14px]"
+        />
+      )}
       <div className="flex items-center gap-3">
         <p className="text-counter-number text-ink tabular-nums">{number}</p>
         <StatusChip status={status} size="l" />
@@ -72,7 +83,7 @@ export function OrderCard({
       <Button
         size="counter"
         variant={status === "ready" ? "secondary" : "primary"}
-        className="w-full"
+        className="relative w-full"
         disabled={busy}
         onClick={onAdvance}
       >

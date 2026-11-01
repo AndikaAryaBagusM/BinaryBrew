@@ -245,7 +245,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 
 **S-01 Staff select and PIN.** Grid of name tiles (large), then a PIN pad. Lock overlay re-uses the pad and also shows the count of waiting orders and a muted chime indicator. Errors: "PIN salah. Sisa percobaan: 3" and "Akun terkunci 5 menit".
 
-**S-02 Counter.** See §6.2. Interactions: tap item to add (or open S-03 if it has modifiers); cart shows lines and total; "Bayar" opens S-04. Queue cards: new orders pulse once and chime; "Mulai" and "Siap" and "Diambil" are the primary actions; tapping the card body opens S-06.
+**S-02 Counter.** See §6.2. Interactions: tap item to add (or open S-03 if it has modifiers); cart shows lines and total; "Bayar" opens S-04. Queue cards: new orders pulse once and chime; "Mulai" and "Siap" and "Diambil" are the primary actions; tapping the card body opens S-06. The header shows "Habis" (S-08) for now: "Restock" arrives with S-09 (Phase 2) and "Pesanan hari ini" with the recent-orders filter of `GET /api/counter/orders`. When an S-04 charge expires, "Buat QR baru" charges the same cart again.
 
 **S-03 POS customization.** Same content as C-02 in a centred dialog with larger targets.
 
@@ -421,7 +421,6 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.newOrderMeta` | {n} item · dibayar {time} |
 | `counter.view` | Lihat |
 | `counter.posTitle` | Pesanan di kasir |
-| `counter.posSoon` | Pesanan langsung di kasir segera tersedia di sini. |
 | `counter.queue` | Antrean |
 | `counter.queueMeta` | {n} aktif · terlama di atas |
 | `counter.filterLabel` | Saring antrean |
@@ -439,6 +438,66 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.lockedWho` | {name} · tidak aktif 3 menit |
 | `counter.waitingSoundOn` | {n} pesanan baru menunggu · suara tetap aktif |
 | `counter.waitingSoundOff` | {n} pesanan baru menunggu · suara mati |
+| `counter.soldOutButton` | Habis |
+| `counter.categoriesLabel` | Kategori menu |
+| `counter.categoryAll` | Semua |
+| `counter.hasOptions` | Pilihan |
+| `counter.clearCart` | Kosongkan |
+| `counter.cartEmpty` | Ketuk menu untuk mulai pesanan. |
+| `counter.removeLine` | Hapus {name} |
+| `counter.charge` | Bayar • {price} |
+| `counter.chargeSoldOut` | Habis: {items}. Hapus dari pesanan dulu. |
+| `counter.optional` | Opsional · maks {n} |
+| `counter.addToOrder` | Tambah ke pesanan • {price} |
+| `counter.chargeTitle` | Minta pelanggan scan QR ini |
+| `counter.total` | Total |
+| `counter.validFor` | Berlaku {time} |
+| `counter.waitingPayment` | Menunggu pembayaran… otomatis lanjut |
+| `counter.showCustomer` | Arahkan layar ke pelanggan |
+| `counter.paidStaticQr` | Pelanggan bayar lewat QR kios |
+| `counter.cancelCharge` | Batalkan |
+| `counter.chargeExpired` | Waktu pembayaran habis. QR ini tidak berlaku lagi. |
+| `counter.newCharge` | Buat QR baru |
+| `counter.paidTitle` | Pembayaran berhasil |
+| `counter.tellNumber` | Sebutkan nomor ini ke pelanggan |
+| `counter.paidAutoClose` | Masuk antrean · menutup otomatis dalam {n} detik |
+| `counter.done` | Selesai |
+| `counter.manualTitle` | Konfirmasi pembayaran manual |
+| `counter.manualCheckTitle` | Cek mutasi dulu |
+| `counter.manualCheckBody` | Buka aplikasi bank atau e-wallet toko dan pastikan {amount} sudah masuk sebelum konfirmasi. |
+| `counter.manualReference` | Referensi pembayaran (wajib) |
+| `counter.manualReferenceHint` | 4 digit terakhir ID transaksi di aplikasi bank/e-wallet |
+| `counter.manualReferenceMissing` | Isi referensi pembayaran dulu |
+| `counter.manualNote` | Catatan (opsional) |
+| `counter.manualNotePlaceholder` | Contoh: dibayar lewat QR kios |
+| `counter.manualConfirm` | Konfirmasi dibayar |
+| `counter.manualFooterPin` | Butuh PIN pemilik · tercatat di log audit dengan nama kamu |
+| `counter.manualFooter` | Tercatat di log audit dengan nama kamu |
+| `counter.back` | Batal |
+| `counter.ownerPinFor` | Konfirmasi pembayaran manual {amount} |
+| `counter.detailChannel` | Saluran |
+| `counter.channelSelf` | Pesan sendiri · {table} |
+| `counter.channelSelfNoTable` | Pesan sendiri |
+| `counter.channelCounter` | Kasir · {name} |
+| `counter.detailPaid` | Dibayar |
+| `counter.detailRef` | Ref transaksi |
+| `counter.methodDynamic` | QRIS dinamis |
+| `counter.methodStatic` | QRIS kios (manual) |
+| `counter.methodCash` | Tunai |
+| `counter.stepPaid` | Dibayar |
+| `counter.stepPreparing` | Disiapkan |
+| `counter.stepReady` | Siap |
+| `counter.stepCollected` | Diambil |
+| `counter.viewReceipt` | Lihat struk |
+| `counter.openDetail` | Detail pesanan {number} |
+| `counter.availabilityTitle` | Ketersediaan menu |
+| `counter.availabilityHelp` | Tandai habis kalau stok fisik habis atau mesin bermasalah. Menu habis langsung tampil abu-abu dengan label "Habis" di HP pelanggan dan tidak bisa dipesan. |
+| `counter.searchLabel` | Cari menu |
+| `counter.searchPlaceholder` | Ketik nama menu… |
+| `counter.searchEmpty` | Tidak ada menu yang cocok. |
+| `counter.available` | Tersedia |
+| `counter.markedSoldOutBy` | Ditandai habis oleh {name}, {time} |
+| `counter.markedSoldOut` | Ditandai habis |
 | `board.preparing` | Sedang disiapkan |
 | `board.ready` | Siap diambil |
 | `board.empty` | Belum ada pesanan |

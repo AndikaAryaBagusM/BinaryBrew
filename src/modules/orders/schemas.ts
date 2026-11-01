@@ -27,3 +27,7 @@ export const createOrderBody = z.strictObject({
     )
     .max(MAX_LINES),
 });
+
+// Walk-in order at the Counter (FR-POS-01): the same lines as self-order;
+// clientSession is the tablet browser's own random id.
+export const counterOrderBody = createOrderBody.omit({ qrToken: true });

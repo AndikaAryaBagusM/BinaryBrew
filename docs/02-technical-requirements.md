@@ -205,11 +205,14 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | Method and path | Auth | Purpose |
 |---|---|---|
 | `GET /api/counter/orders?status=` | Staff | Paid queue (`paid`, `preparing`, `ready`), oldest payment first, never cached. The `status` filter for recent orders is not built yet. |
-| `POST /api/counter/orders` | Staff | Create counter order (same service as self-order). |
+| `GET /api/counter/menu` | Staff | Menu for the POS grid and S-08: categories, items with modifier groups, availability and who marked an item sold out (name, time), pricing settings and whether manual confirmation needs the owner PIN. Never cached; ignores `ordering_enabled`. |
+| `POST /api/counter/orders` | Staff | Create a walk-in order (same service as self-order, channel `counter`, `created_by` the staff user) and its QRIS charge. `Idempotency-Key` header; 201 for a new order, 200 for a repeat. No open-order cap (BR-11 is per customer device). |
+| `GET /api/counter/orders/{id}` | Staff | One order for S-04 and S-06: lines, totals, status times, channel, table label, creator, payment (method, status, QR string while pending, reference). |
+| `POST /api/counter/orders/{id}/cancel` | Staff | Cancel an unpaid counter order from S-04 (it becomes `expired`, its charge is cancelled). Any other order is returned unchanged with its status. |
 | `POST /api/counter/orders/{id}/status` | Staff/Barista | `preparing`, `ready`, `completed`, one step forward only. 409 `ORDER_STATUS_CHANGED` (with the current status) if the order already moved. |
-| `POST /api/counter/orders/{id}/manual-payment` | Staff + Elev (if setting) | Confirm a static-QR payment with reference and note. |
+| `POST /api/counter/orders/{id}/manual-payment` | Staff + Elev (if setting) | Confirm a static-QR payment: `reference` (1–64 chars, required), optional `note`, and `elevationId` (scope `manual_payment`) when `manual_payment_requires_owner_pin` is on. Returns the queue number. 409 `ORDER_STATUS_CHANGED` if the order is no longer awaiting payment; an expired order is revived only if its items are still available (else 409 `ITEM_SOLD_OUT`). Writes `payment.manual_confirm` to `audit_logs`. |
 | `POST /api/counter/orders/{id}/void` | Elev | Void with reason (Phase 3). |
-| `POST /api/counter/menu-items/{id}/sold-out` | Staff | Toggle manual sold-out. |
+| `POST /api/counter/menu-items/{id}/sold-out` | Staff | Set manual sold-out: `{soldOut: boolean}`. Writes `menu_item.sold_out` or `menu_item.available` to `audit_logs` when the flag changes. The customer menu and checkout read it on every request. |
 | `GET /api/stream/counter` | Staff | SSE: `order` events `{orderId, status, queueNumber}` for new and changed orders, plus one `sync` event once the stream is listening, so a refetch then misses nothing. |
 
 ### Owner
