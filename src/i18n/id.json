@@ -44,6 +44,7 @@
   "error.generic": "Ada gangguan, coba lagi",
   "error.validation": "Data yang dikirim tidak valid",
   "error.orderingClosed": "Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir.",
+  "error.openOrderLimit": "Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu.",
   "edge.qrInvalid.title": "Kode QR sudah tidak berlaku",
   "edge.qrInvalid.text": "Silakan scan kode di kasir",
   "edge.closed.title": "Pemesanan sedang ditutup",

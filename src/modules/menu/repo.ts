@@ -13,7 +13,7 @@ import {
 
 export async function selectActiveQr(token: string, db: DbExecutor = getDb()) {
   const [row] = await db
-    .select({ label: qrTokens.label })
+    .select({ id: qrTokens.id, label: qrTokens.label })
     .from(qrTokens)
     .where(and(eq(qrTokens.token, token), eq(qrTokens.isActive, true)));
   return row;
@@ -95,4 +95,22 @@ export function selectActiveOptions(
       ),
     )
     .orderBy(asc(modifierOptions.sortOrder), asc(modifierOptions.name));
+}
+
+// Items by id for checkout, including inactive ones (so a refusal can name
+// them), with whether their category is active.
+export function selectItemsForOrder(ids: string[], db: DbExecutor = getDb()) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: menuItems.id,
+      name: menuItems.name,
+      price: menuItems.price,
+      isActive: menuItems.isActive,
+      manualSoldOut: menuItems.manualSoldOut,
+      categoryActive: categories.isActive,
+    })
+    .from(menuItems)
+    .innerJoin(categories, eq(categories.id, menuItems.categoryId))
+    .where(inArray(menuItems.id, ids));
 }

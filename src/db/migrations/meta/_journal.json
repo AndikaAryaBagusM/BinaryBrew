@@ -15,6 +15,13 @@
       "when": 1792133283315,
       "tag": "0001_constraints_functions_views",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793526314597,
+      "tag": "0002_order_idempotency_key",
+      "breakpoints": true
     }
   ]
 }

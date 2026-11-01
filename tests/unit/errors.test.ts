@@ -33,6 +33,7 @@ describe("httpStatusFor", () => {
     ["ITEM_SOLD_OUT", 409],
     ["ORDER_EXPIRED", 409],
     ["ORDERING_CLOSED", 409],
+    ["OPEN_ORDER_LIMIT", 409],
     ["ACCOUNT_LOCKED", 423],
     ["RATE_LIMITED", 429],
     ["INTERNAL", 500],

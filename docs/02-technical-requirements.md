@@ -159,7 +159,7 @@ Rules:
 | Errors | Typed `AppError` with a stable `code` (`ITEM_SOLD_OUT`, `ORDER_EXPIRED`, `FORBIDDEN`, …). Route handlers map codes to HTTP status and Indonesian messages. |
 | Responses | JSON `{ data }` or `{ error: { code, message } }`. |
 | Validation | Zod at every boundary; reject unknown fields. |
-| Idempotency | Webhooks by `(provider, event_id)`; client order creation by a client-generated `Idempotency-Key` header stored on the order's payment charge request. |
+| Idempotency | Webhooks by `(provider, event_id)`; client order creation by a client-generated `Idempotency-Key` header stored on the order (`orders.idempotency_key`, unique per `client_session`); a retry returns the same order. |
 | Feature flags | Settings table, not environment variables, for anything the owner may change. |
 
 ## 6. API surface

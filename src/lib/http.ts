@@ -39,6 +39,8 @@ function messageFor(error: AppError): string {
       return t("error.qrInvalid");
     case "ORDERING_CLOSED":
       return t("error.orderingClosed");
+    case "OPEN_ORDER_LIMIT":
+      return t("error.openOrderLimit", { n: Number(details.limit) });
     case "ITEM_SOLD_OUT":
       return t("error.itemSoldOut");
     default:
