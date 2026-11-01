@@ -68,9 +68,24 @@
   --text-display-m--line-height: 1.1;
   --text-display-m--letter-spacing: -1px;
   --text-display-m--font-weight: 800;
-  --text-board: clamp(10rem, 11.5vw, 13.75rem); /* 160–220 px, TV board */
-  --text-board--line-height: 1;
-  --text-board--font-weight: 800;
+  /* TV board (Figma 17:2): sized to the screen width, exact at 1920 px */
+  --text-board-number: clamp(5rem, 7.8vw, 9.375rem); /* 150 px */
+  --text-board-number--line-height: 1;
+  --text-board-number--letter-spacing: -0.02em;
+  --text-board-number--font-weight: 800;
+  --text-board-number-s: clamp(3.75rem, 5.83vw, 7rem); /* 112 px */
+  --text-board-number-s--line-height: 1;
+  --text-board-number-s--letter-spacing: -0.02em;
+  --text-board-number-s--font-weight: 800;
+  --text-board-title: clamp(2.5rem, 3.33vw, 4rem); /* 64 px */
+  --text-board-title--line-height: 1.2;
+  --text-board-title--font-weight: 700;
+  --text-board-heading: clamp(2rem, 2.7vw, 3.25rem); /* 52 px */
+  --text-board-heading--line-height: 1.2;
+  --text-board-heading--font-weight: 700;
+  --text-board-hint: clamp(1.125rem, 1.15vw, 1.375rem); /* 22 px */
+  --text-board-hint--line-height: 1.27;
+  --text-board-hint--font-weight: 700;
   --text-h1: 1.5rem;
   --text-h1--line-height: 1.33;
   --text-h1--letter-spacing: -0.5px;
