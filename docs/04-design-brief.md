@@ -309,6 +309,12 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `menu.title` | Menu |
 | `menu.soldOut` | Habis |
 | `menu.recommended` | Rekomendasi |
+| `menu.myOrders` | Pesanan saya |
+| `menu.addItem` | Tambah {name} |
+| `menu.categoriesLabel` | Kategori menu |
+| `menu.emptyCategory` | Belum ada menu di kategori ini |
+| `menu.orderedAt` | Dipesan {time} |
+| `menu.statusLink` | Lihat status |
 | `cart.title` | Keranjang |
 | `cart.empty` | Keranjang masih kosong |
 | `cart.taxIncluded` | Harga sudah termasuk pajak |
@@ -330,6 +336,11 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.priceChanged` | Harga diperbarui |
 | `error.generic` | Ada gangguan, coba lagi |
 | `error.validation` | Data yang dikirim tidak valid |
+| `edge.qrInvalid.title` | Kode QR sudah tidak berlaku |
+| `edge.qrInvalid.text` | Silakan scan kode di kasir |
+| `edge.closed.title` | Pemesanan sedang ditutup |
+| `edge.closed.text` | Kamu tetap bisa pesan langsung di kasir |
+| `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
@@ -360,6 +371,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `pin.progress` | {entered} dari {total} digit |
 | `common.close` | Tutup |
 | `common.loading` | Memuat… |
+| `common.retry` | Coba lagi |
 
 Money format: `Rp 22.000`. Time: 24-hour (`18.30`). Dates: `8 Okt 2026`.
 
