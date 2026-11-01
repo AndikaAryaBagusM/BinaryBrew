@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { emptyTestDatabaseUrl, maintenanceDatabaseUrl } from "./databases";
 
 // Integration tests start from an empty, freshly migrated test database
 // (Tech §12). Runs once before all integration test files.
@@ -27,5 +28,21 @@ export default async function setup() {
     await migrate(drizzle(sql), { migrationsFolder: "src/db/migrations" });
   } finally {
     await sql.end();
+  }
+
+  // Clone the empty, migrated database for tests that need it empty. A
+  // template must have no open connections, so this runs from "postgres".
+  const emptyName = new URL(emptyTestDatabaseUrl(url)).pathname.slice(1);
+  const admin = postgres(maintenanceDatabaseUrl(url), {
+    max: 1,
+    onnotice: () => {},
+  });
+  try {
+    await admin.unsafe(`drop database if exists "${emptyName}"`);
+    await admin.unsafe(
+      `create database "${emptyName}" template "${databaseName}"`,
+    );
+  } finally {
+    await admin.end();
   }
 }

@@ -1,8 +1,9 @@
-import type { DbExecutor } from "@/db/client";
+import { type DbExecutor, getDb } from "@/db/client";
 import { getEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { newSecretToken } from "@/lib/ids";
 import { logger } from "@/lib/logger";
+import { audit } from "@/modules/audit/service";
 import { hashSecret, hashToken, verifySecret } from "./hashing";
 import { createRateLimiter } from "./rate-limit";
 import * as repo from "./repo";
@@ -302,11 +303,26 @@ export async function registerDevice(
 ) {
   const owner = requireRole(actor, ["owner"]);
   const deviceToken = newSecretToken();
-  const device = await repo.insertDevice({
-    name: input.name,
-    tokenHash: tokenHash(deviceToken),
-    registeredBy: owner.userId,
-    now,
+  const device = await getDb().transaction(async (tx) => {
+    const created = await repo.insertDevice(
+      {
+        name: input.name,
+        tokenHash: tokenHash(deviceToken),
+        registeredBy: owner.userId,
+        now,
+      },
+      tx,
+    );
+    await audit(
+      {
+        action: "device.register",
+        actor: owner,
+        entity: { type: "device", id: created.id },
+        metadata: { name: created.name },
+      },
+      { db: tx },
+    );
+    return created;
   });
   logger.info({
     event: "auth.device_registered",
@@ -333,12 +349,29 @@ export async function elevate(
   if (owners.length === 0) throw new AppError("FORBIDDEN");
 
   const owner = await verifyPin(owners, input.pin, now);
-  const elevation = await repo.insertElevation({
-    sessionId: requester.sessionId,
-    ownerUserId: owner.id,
-    scope: input.scope,
-    now,
-    expiresAt: new Date(now.getTime() + ELEVATION_TTL_MS),
+  // The sensitive action that spends the elevation writes its own audit row
+  // with the elevation id; this one records who confirmed what, and when.
+  const elevation = await getDb().transaction(async (tx) => {
+    const created = await repo.insertElevation(
+      {
+        sessionId: requester.sessionId,
+        ownerUserId: owner.id,
+        scope: input.scope,
+        now,
+        expiresAt: new Date(now.getTime() + ELEVATION_TTL_MS),
+      },
+      tx,
+    );
+    await audit(
+      {
+        action: "elevation.grant",
+        actor: requester,
+        entity: { type: "elevation", id: created.id },
+        metadata: { scope: input.scope, ownerUserId: owner.id },
+      },
+      { db: tx },
+    );
+    return created;
   });
   return { elevationId: elevation.id, expiresAt: elevation.expiresAt };
 }
