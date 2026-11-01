@@ -60,3 +60,18 @@ export function formatTime(at: Date): string {
 export function formatDate(at: Date): string {
   return dateFormat.format(at);
 }
+
+// O-13 "Terakhir aktif": "18.41" today, "kemarin" yesterday, otherwise the
+// date; calendar days in the shop's time zone.
+export function formatLastActive(
+  at: Date,
+  now: Date,
+  yesterdayLabel: string,
+): string {
+  const day = formatDate(at);
+  if (day === formatDate(now)) return formatTime(at);
+  if (day === formatDate(new Date(now.getTime() - 86_400_000))) {
+    return yesterdayLabel;
+  }
+  return day;
+}

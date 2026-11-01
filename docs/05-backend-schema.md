@@ -162,6 +162,10 @@ create table menu_items (
   updated_at      timestamptz not null default now()
 );
 create index menu_items_category_idx on menu_items (category_id, sort_order);
+-- Categories and menu items are never deleted (order_items and the
+-- recommendation tables point at them): is_active = false hides them from
+-- customers and the Counter. Category names are also unique ignoring case,
+-- checked by the menu service.
 
 create table ingredients (
   id            uuid primary key default gen_random_uuid(),

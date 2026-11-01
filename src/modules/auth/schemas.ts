@@ -24,3 +24,12 @@ export const elevateBody = z.strictObject({
 export const registerDeviceBody = z.strictObject({
   name: z.string().trim().min(1).max(60),
 });
+
+// O-13 (FR-OW-05): staff and barista only; the one owner comes from the seed.
+export const createUserBody = z.strictObject({
+  name: z.string().trim().min(1).max(40),
+  role: z.enum(["staff", "barista"]),
+  pin,
+});
+
+export const resetPinBody = z.strictObject({ pin });

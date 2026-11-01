@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Modal } from "@/components/modal";
+import { Switch } from "@/components/switch";
 import { t } from "@/i18n";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/time";
@@ -99,26 +100,12 @@ export function AvailabilityPanel({
                     {statusText(item)}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={item.isAvailable}
+                <Switch
+                  checked={item.isAvailable}
                   aria-labelledby={`avail-${item.id}`}
                   disabled={busy.has(item.id)}
                   onClick={() => void toggle(item)}
-                  className={cn(
-                    "focus-ring relative h-8 w-14 shrink-0 cursor-pointer rounded-full transition-colors duration-100 disabled:opacity-40",
-                    item.isAvailable ? "bg-brand" : "bg-border-strong",
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "absolute top-1 size-6 rounded-full bg-surface transition-[left] duration-100",
-                      item.isAvailable ? "left-7" : "left-1",
-                    )}
-                  />
-                </button>
+                />
               </li>
             ))}
           </ul>

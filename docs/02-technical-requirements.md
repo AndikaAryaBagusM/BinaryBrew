@@ -217,6 +217,26 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 
 ### Owner
 
+Built in Phase 1 (P1-13). Owner only; every change checks the origin, runs in one transaction and writes `audit_logs`. GETs are never cached.
+
+| Method and path | Auth | Purpose |
+|---|---|---|
+| `GET /api/owner/menu-items` | Owner | O-03: every category (with item count) and every item, active or not, with `isPromoted` and who marked it sold out. |
+| `POST /api/owner/menu-items` | Owner | Create an item: `categoryId`, `name` (1–60), `price` (whole rupiah, 0–10,000,000), optional `description` (≤ 200), `isActive`, `isPromoted`. 201. Audits `menu_item.create`. |
+| `PATCH /api/owner/menu-items/{id}` | Owner | Any subset of those fields (the "Promosikan" switch sends `isPromoted`). Returns `{id, changed}`; audits `menu_item.update` with each changed field's `from` and `to`, only when something changed. Items are never deleted: `isActive: false` hides them. |
+| `POST /api/owner/categories` | Owner | Create a category (`name`, unique ignoring case, else 409 `NAME_TAKEN`); it goes last. Audits `category.create`. |
+| `PATCH /api/owner/categories/{id}` | Owner | Rename or switch off (`name`, `isActive`); a switched-off category hides its items. 409 `NAME_TAKEN`. Audits `category.update`. |
+| `GET /api/owner/users` | Owner | O-13: users (id, name, role, active, last activity). Never PIN or password hashes. |
+| `POST /api/owner/users` | Owner | Add a `staff` or `barista` user: `name` (1–40, unique among active users ignoring case, else 409 `NAME_TAKEN`), `role`, `pin` (4–6 digits). 201. Audits `user.create` (name and role only). |
+| `POST /api/owner/users/{id}/pin` | Owner | Reset a PIN (`pin`); clears any lockout and ends the user's open sessions. Audits `user.pin_reset`. |
+| `GET /api/owner/devices` | Owner | O-13: registered devices with kind, who registered them, last seen and revoked time. Registering uses `POST /api/devices/register`; revoking comes with P3-05. |
+| `GET /api/owner/settings` | Owner | O-14: all settings with their current values. |
+| `PUT /api/owner/settings` | Owner | Any subset of the O-14 basic keys (`shop_name`, `business_day_cutoff`, `ordering_enabled`, `tax_rate_bps`, `tax_inclusive`, `service_charge_bps`, `order_expiry_minutes`, `manual_payment_requires_owner_pin`, `ready_auto_complete_minutes`, `order_retention_months`, `low_margin_threshold_pct`); other keys are refused. All values are checked before any is written; one `setting.update` row per key that changed. Returns `{changed}`. |
+
+O-03 marks items sold out through `POST /api/counter/menu-items/{id}/sold-out` (the owner is a Counter role).
+
+Later phases:
+
 | Area | Endpoints (all Owner unless noted) |
 |---|---|
 | Menu | CRUD `/api/owner/categories`, `/menu-items`, `/modifier-groups`, `/modifier-options`; `PUT /menu-items/{id}/recipe`; promote flag via menu item update |

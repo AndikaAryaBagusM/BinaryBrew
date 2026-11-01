@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 import { formatTime } from "@/lib/time";
 import type { UserRole } from "@/modules/auth/service";
-import { roleLabel } from "../role-label";
+import { roleLabel } from "@/lib/role-label";
 
 // S-01 (Figma 14:1010, 14:1041, 14:1127, 14:1201): choose your name, then
 // the PIN; 5 wrong PINs lock that user for 5 minutes (PRD A4).

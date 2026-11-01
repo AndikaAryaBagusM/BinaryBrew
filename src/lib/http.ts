@@ -45,6 +45,8 @@ function messageFor(error: AppError): string {
       return t("error.itemSoldOut");
     case "ORDER_STATUS_CHANGED":
       return t("error.orderStatusChanged");
+    case "NAME_TAKEN":
+      return t("error.nameTaken");
     default:
       return t("error.generic");
   }

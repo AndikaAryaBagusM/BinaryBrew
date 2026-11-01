@@ -8,13 +8,19 @@ import * as repo from "./repo";
 
 // Names are "<entity>.<verb>"; add new ones as tasks need them.
 export const auditActions = [
+  "category.create",
+  "category.update",
   "device.register",
   "elevation.grant",
   "menu_item.available",
+  "menu_item.create",
   "menu_item.sold_out",
+  "menu_item.update",
   "payment.manual_confirm",
   "refund.request",
   "setting.update",
+  "user.create",
+  "user.pin_reset",
 ] as const;
 export type AuditAction = (typeof auditActions)[number];
 

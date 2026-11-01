@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   divideRoundHalfUp,
   exclusiveTaxAmount,
+  formatBpsAsPercent,
   formatPriceDelta,
   formatRupiah,
   inclusiveTaxAmount,
+  parseRupiahInput,
+  percentToBps,
   serviceChargeAmount,
 } from "@/lib/money";
 
@@ -120,5 +123,56 @@ describe("formatRupiah (Design §9)", () => {
 
   it("rejects a fractional amount", () => {
     expect(() => formatRupiah(1.5)).toThrow(RangeError);
+  });
+});
+
+describe("parseRupiahInput (O-03 price field)", () => {
+  it.each([
+    ["22000", 22_000],
+    ["22.000", 22_000],
+    ["Rp 22.000", 22_000],
+    ["rp22.000", 22_000],
+    [" 1.500.000 ", 1_500_000],
+    ["0", 0],
+  ])("%j → %i", (text, amount) => {
+    expect(parseRupiahInput(text)).toBe(amount);
+  });
+
+  it.each(["", "abc", "22,5", "-5000", "22.000,00", "1234567890"])(
+    "refuses %j",
+    (text) => {
+      expect(parseRupiahInput(text)).toBeNull();
+    },
+  );
+});
+
+describe("percentToBps and formatBpsAsPercent (O-14 rates)", () => {
+  it.each([
+    ["0", 0],
+    ["11", 1_100],
+    ["11,5", 1_150],
+    ["11.25", 1_125],
+    ["10 %", 1_000],
+    ["100", 10_000],
+  ])("%j → %i bps", (text, bps) => {
+    expect(percentToBps(text)).toBe(bps);
+  });
+
+  it.each(["", "abc", "100,01", "101", "-1", "1,234", "5%%"])(
+    "refuses %j",
+    (text) => {
+      expect(percentToBps(text)).toBeNull();
+    },
+  );
+
+  it.each([
+    [0, "0"],
+    [1_100, "11"],
+    [1_150, "11,5"],
+    [1_125, "11,25"],
+    [10_000, "100"],
+  ])("%i bps → %j, and back", (bps, text) => {
+    expect(formatBpsAsPercent(bps)).toBe(text);
+    expect(percentToBps(text)).toBe(bps);
   });
 });

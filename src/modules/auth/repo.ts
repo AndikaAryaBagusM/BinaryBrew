@@ -1,4 +1,5 @@
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, max, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type DbExecutor, getDb } from "@/db/client";
 import { devices, elevations, sessions, users } from "@/db/schema";
 
@@ -38,6 +39,98 @@ export function listActiveUsers(db: DbExecutor = getDb()) {
     .from(users)
     .where(eq(users.isActive, true))
     .orderBy(asc(users.name));
+}
+
+// O-13: every user, with the last time any of their sessions was used.
+export function listUsersWithActivity(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      role: users.role,
+      isActive: users.isActive,
+      lastActiveAt: max(sessions.lastActivityAt),
+    })
+    .from(users)
+    .leftJoin(sessions, eq(sessions.userId, users.id))
+    .groupBy(users.id)
+    .orderBy(asc(users.role), asc(users.name));
+}
+
+// Serialises user creation, so two owners' tabs cannot both pass the
+// duplicate-name check.
+export async function lockUserNames(db: DbExecutor) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended('users.name', 0))`,
+  );
+}
+
+export async function findActiveUserByName(name: string, db: DbExecutor) {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      and(
+        eq(sql`lower(${users.name})`, name.toLowerCase()),
+        eq(users.isActive, true),
+      ),
+    );
+  return user;
+}
+
+export async function insertUser(
+  values: {
+    name: string;
+    role: "staff" | "barista";
+    pinHash: string;
+    now: Date;
+  },
+  db: DbExecutor,
+) {
+  const [user] = await db
+    .insert(users)
+    .values({
+      name: values.name,
+      role: values.role,
+      pinHash: values.pinHash,
+      createdAt: values.now,
+      updatedAt: values.now,
+    })
+    .returning({ id: users.id, name: users.name, role: users.role });
+  return user!;
+}
+
+// A new PIN also lifts any lockout.
+export async function setUserPin(
+  id: string,
+  pinHash: string,
+  now: Date,
+  db: DbExecutor,
+) {
+  const rows = await db
+    .update(users)
+    .set({ pinHash, failedPinAttempts: 0, lockedUntil: null, updatedAt: now })
+    .where(eq(users.id, id))
+    .returning({ id: users.id, name: users.name });
+  return rows[0];
+}
+
+// O-13 devices, newest first, with who registered each one.
+export function listDevicesWithRegistrar(db: DbExecutor = getDb()) {
+  const registrar = alias(users, "registrar");
+  return db
+    .select({
+      id: devices.id,
+      name: devices.name,
+      kind: devices.kind,
+      registeredAt: devices.registeredAt,
+      registeredByName: registrar.name,
+      lastSeenAt: devices.lastSeenAt,
+      revokedAt: devices.revokedAt,
+    })
+    .from(devices)
+    .leftJoin(registrar, eq(registrar.id, devices.registeredBy))
+    .orderBy(asc(devices.registeredAt));
 }
 
 // One atomic update, so parallel wrong PINs are all counted. On the attempt

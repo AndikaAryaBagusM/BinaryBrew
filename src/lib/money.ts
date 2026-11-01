@@ -79,3 +79,27 @@ export function formatPriceDelta(delta: number): string {
   const amount = formatRupiah(Math.abs(delta));
   return delta > 0 ? `+${amount}` : `−${amount}`;
 }
+
+// O-03 price field: "22.000", "Rp 22.000" or "22000" → 22000; null if it is
+// not a whole number of rupiah.
+export function parseRupiahInput(text: string): number | null {
+  const digits = text.replace(/^\s*rp\s*/i, "").replace(/[.\s]/g, "");
+  return /^\d{1,9}$/.test(digits) ? Number(digits) : null;
+}
+
+// O-14 rate fields, in percent with up to two decimals ("11", "11,5" or
+// "11.25") ↔ basis points; null outside 0–100 %.
+export function percentToBps(text: string): number | null {
+  const match = /^\s*(\d{1,3})(?:[.,](\d{1,2}))?\s*%?\s*$/.exec(text);
+  if (!match) return null;
+  const bps = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  return bps <= BPS_PER_UNIT ? bps : null;
+}
+
+// 1100 → "11", 1150 → "11,5", 1125 → "11,25".
+export function formatBpsAsPercent(bps: number): string {
+  const whole = Math.floor(bps / 100);
+  const cents = bps % 100;
+  if (cents === 0) return String(whole);
+  return `${whole},${String(cents).padStart(2, "0").replace(/0$/, "")}`;
+}

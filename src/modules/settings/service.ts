@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { audit } from "@/modules/audit/service";
@@ -74,28 +74,74 @@ export async function setSetting(
     throw new AppError("VALIDATION_FAILED", { details: { fields: [key] } });
   }
   const next = parsed.data;
+  return getDb().transaction(async (tx) => {
+    const changed = await writeSetting(tx, owner, key, next, reason, now);
+    return { key, value: next, changed };
+  });
+}
+
+// O-14 "Simpan perubahan" (FR-OW-04): several settings at once, all or
+// nothing. Every value is checked before anything is written; each key that
+// really changes gets its own setting.update row. Rows are locked in key
+// order, so two saves cannot deadlock.
+export async function setSettings(
+  actor: SessionUser | null,
+  values: Partial<Settings>,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ changed: SettingKey[] }> {
+  const owner = requireRole(actor, ["owner"]);
+  const entries: [SettingKey, unknown][] = [];
+  const invalid: string[] = [];
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) continue;
+    if (!isSettingKey(key)) {
+      invalid.push(key);
+      continue;
+    }
+    const parsed = settingDefinitions[key].schema.safeParse(value);
+    if (parsed.success) entries.push([key, parsed.data]);
+    else invalid.push(key);
+  }
+  if (invalid.length > 0) {
+    throw new AppError("VALIDATION_FAILED", { details: { fields: invalid } });
+  }
+  entries.sort(([a], [b]) => a.localeCompare(b));
 
   return getDb().transaction(async (tx) => {
-    const current = await repo.selectSettingForUpdate(key, tx);
-    const previous = current ? current.value : defaultSettings[key];
-    if (JSON.stringify(previous) === JSON.stringify(next)) {
-      return { key, value: next, changed: false };
+    const changed: SettingKey[] = [];
+    for (const [key, next] of entries) {
+      if (await writeSetting(tx, owner, key, next, undefined, now)) {
+        changed.push(key);
+      }
     }
-
-    await repo.upsertSetting(
-      { key, value: next, updatedBy: owner.userId, now },
-      tx,
-    );
-    await audit(
-      {
-        action: "setting.update",
-        actor: owner,
-        entity: { type: "setting", id: key },
-        reason,
-        metadata: { from: previous, to: next },
-      },
-      { db: tx },
-    );
-    return { key, value: next, changed: true };
+    return { changed };
   });
+}
+
+async function writeSetting(
+  tx: DbExecutor,
+  owner: SessionUser,
+  key: SettingKey,
+  next: unknown,
+  reason: string | undefined,
+  now: Date,
+): Promise<boolean> {
+  const current = await repo.selectSettingForUpdate(key, tx);
+  const previous = current ? current.value : defaultSettings[key];
+  if (JSON.stringify(previous) === JSON.stringify(next)) return false;
+  await repo.upsertSetting(
+    { key, value: next, updatedBy: owner.userId, now },
+    tx,
+  );
+  await audit(
+    {
+      action: "setting.update",
+      actor: owner,
+      entity: { type: "setting", id: key },
+      reason,
+      metadata: { from: previous, to: next },
+    },
+    { db: tx, now },
+  );
+  return true;
 }

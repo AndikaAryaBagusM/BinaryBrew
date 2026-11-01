@@ -221,6 +221,227 @@ export async function setManualSoldOut(
   return { menuItemId: input.menuItemId, soldOut: input.soldOut };
 }
 
+// O-03 Menu management (FR-OW-02, FR-RC-05): the owner's view of every
+// category and item, active or not. Items are never deleted, because order
+// history points at them: "Nonaktif" hides them from customers and the
+// Counter instead. Every change is audited; an update records each changed
+// field with its old and new value.
+
+export type OwnerCategory = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  itemCount: number;
+};
+
+export type OwnerMenuItem = {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  price: number;
+  isActive: boolean;
+  isPromoted: boolean;
+  soldOut: CounterMenuItem["soldOut"];
+};
+
+export type OwnerMenu = {
+  categories: OwnerCategory[];
+  items: OwnerMenuItem[];
+};
+
+export async function getOwnerMenu(
+  actor: SessionUser | null,
+): Promise<OwnerMenu> {
+  requireRole(actor, ["owner"]);
+  const [categories, items] = await Promise.all([
+    repo.selectAllCategories(),
+    repo.selectAllItems(),
+  ]);
+  const marks = await latestAuditByEntity(
+    "menu_item",
+    items.filter((item) => item.manualSoldOut).map((item) => item.id),
+    SOLD_OUT_ACTIONS,
+  );
+  const counts = groupBy(items, (item) => item.categoryId);
+  return {
+    categories: categories.map((category) => ({
+      id: category.id,
+      name: category.name,
+      isActive: category.isActive,
+      itemCount: counts.get(category.id)?.length ?? 0,
+    })),
+    items: items.map(({ manualSoldOut, ...item }) => {
+      const mark = manualSoldOut ? marks.get(item.id) : undefined;
+      return {
+        ...item,
+        soldOut: !manualSoldOut
+          ? null
+          : mark?.action === "menu_item.sold_out"
+            ? { byName: mark.actorName, at: mark.at }
+            : { byName: null, at: null },
+      };
+    }),
+  };
+}
+
+export type MenuItemInput = {
+  categoryId: string;
+  name: string;
+  description: string | null;
+  price: number;
+  isActive: boolean;
+  isPromoted: boolean;
+};
+
+export async function createMenuItem(
+  actor: SessionUser | null,
+  input: MenuItemInput,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string }> {
+  const owner = requireRole(actor, ["owner"]);
+  return getDb().transaction(async (tx) => {
+    if (!(await repo.categoryExists(input.categoryId, tx))) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { fields: ["categoryId"] },
+      });
+    }
+    const item = await repo.insertMenuItem({ ...input, now }, tx);
+    await audit(
+      {
+        action: "menu_item.create",
+        actor: owner,
+        entity: { type: "menu_item", id: item.id },
+        metadata: { ...input },
+      },
+      { db: tx, now },
+    );
+    return item;
+  });
+}
+
+export async function updateMenuItem(
+  actor: SessionUser | null,
+  id: string,
+  patch: Partial<MenuItemInput>,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: string[] }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(async (tx) => {
+    const item = await repo.lockItem(id, tx);
+    if (!item) throw new AppError("NOT_FOUND");
+    if (
+      patch.categoryId !== undefined &&
+      patch.categoryId !== item.categoryId &&
+      !(await repo.categoryExists(patch.categoryId, tx))
+    ) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { fields: ["categoryId"] },
+      });
+    }
+    const changes = changedFields(item, patch);
+    const changed = Object.keys(changes);
+    if (changed.length === 0) return { id, changed };
+    await repo.updateMenuItem(
+      id,
+      Object.fromEntries(changed.map((key) => [key, changes[key]!.to])),
+      now,
+      tx,
+    );
+    await audit(
+      {
+        action: "menu_item.update",
+        actor: owner,
+        entity: { type: "menu_item", id },
+        metadata: { name: item.name, changes },
+      },
+      { db: tx, now },
+    );
+    return { id, changed };
+  });
+}
+
+export async function createCategory(
+  actor: SessionUser | null,
+  input: { name: string },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; name: string; isActive: boolean }> {
+  const owner = requireRole(actor, ["owner"]);
+  return getDb().transaction(async (tx) => {
+    await repo.lockCategoryNames(tx);
+    if (await repo.findCategoryByName(input.name, null, tx)) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const category = await repo.insertCategory(input.name, tx);
+    await audit(
+      {
+        action: "category.create",
+        actor: owner,
+        entity: { type: "category", id: category.id },
+        metadata: { name: category.name },
+      },
+      { db: tx, now },
+    );
+    return category;
+  });
+}
+
+// A switched-off category hides all its items from customers and the
+// Counter; the items keep their own setting for when it comes back.
+export async function updateCategory(
+  actor: SessionUser | null,
+  id: string,
+  patch: { name?: string; isActive?: boolean },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: string[] }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(async (tx) => {
+    await repo.lockCategoryNames(tx);
+    const category = await repo.lockCategory(id, tx);
+    if (!category) throw new AppError("NOT_FOUND");
+    if (
+      patch.name !== undefined &&
+      (await repo.findCategoryByName(patch.name, id, tx))
+    ) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const changes = changedFields(category, patch);
+    const changed = Object.keys(changes);
+    if (changed.length === 0) return { id, changed };
+    await repo.updateCategory(
+      id,
+      Object.fromEntries(changed.map((key) => [key, changes[key]!.to])),
+      tx,
+    );
+    await audit(
+      {
+        action: "category.update",
+        actor: owner,
+        entity: { type: "category", id },
+        metadata: { name: category.name, changes },
+      },
+      { db: tx, now },
+    );
+    return { id, changed };
+  });
+}
+
+// The fields of a patch whose value differs from the current row.
+function changedFields<T extends Record<string, unknown>>(
+  current: T,
+  patch: Partial<T>,
+): Record<string, { from: unknown; to: unknown }> {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const [key, to] of Object.entries(patch)) {
+    if (to !== undefined && current[key] !== to) {
+      changes[key] = { from: current[key], to };
+    }
+  }
+  return changes;
+}
+
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const row of rows) {
