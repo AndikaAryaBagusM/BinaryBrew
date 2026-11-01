@@ -186,6 +186,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 |---|---|---|
 | `POST /api/webhooks/payments/{provider}` | Signature | Receive payment events. 200 once the event is recorded and processed, duplicates and unknown references included; 401 for a bad signature; 404 for a provider that is not configured; 5xx if processing failed (nothing is kept, so the gateway retries). |
 | `POST /api/dev/mock-pay/{paymentId}` | Dev only, same origin | Mock provider: simulate "customer paid". 404 when `PAYMENT_PROVIDER` is not `mock`. |
+| `GET /api/dev/counter-device` | Dev only | Sets the counter device cookie from `SEED_COUNTER_DEVICE_TOKEN` and redirects to `/counter/login`. 404 unless `NODE_ENV` is `development` and the variable is set. |
 
 ### Auth
 
@@ -194,6 +195,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | `POST /api/auth/owner-login` | Public + rate limit | Email and password. |
 | `GET /api/auth/pin-users` | Registered device | Active users (id, name, role only) for the S-01 name picker. |
 | `POST /api/auth/pin-login` | Registered device + rate limit | `userId` + PIN. |
+| `POST /api/auth/unlock` | Staff + rate limit | PIN of the signed-in user; clears the S-01 lock overlay on the same session. Wrong PINs count toward the same lockout as `pin-login`. |
 | `POST /api/auth/logout` | Staff | End session. |
 | `POST /api/auth/elevate` | Staff | Owner PIN → short-lived elevation for one scope. |
 | `POST /api/devices/register` | Owner | Register this browser as a counter device. |
@@ -202,13 +204,13 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /api/counter/orders?status=` | Staff | Paid queue and recent orders. |
+| `GET /api/counter/orders?status=` | Staff | Paid queue (`paid`, `preparing`, `ready`), oldest payment first, never cached. The `status` filter for recent orders is not built yet. |
 | `POST /api/counter/orders` | Staff | Create counter order (same service as self-order). |
-| `POST /api/counter/orders/{id}/status` | Staff/Barista | `preparing`, `ready`, `completed`. |
+| `POST /api/counter/orders/{id}/status` | Staff/Barista | `preparing`, `ready`, `completed`, one step forward only. 409 `ORDER_STATUS_CHANGED` (with the current status) if the order already moved. |
 | `POST /api/counter/orders/{id}/manual-payment` | Staff + Elev (if setting) | Confirm a static-QR payment with reference and note. |
 | `POST /api/counter/orders/{id}/void` | Elev | Void with reason (Phase 3). |
 | `POST /api/counter/menu-items/{id}/sold-out` | Staff | Toggle manual sold-out. |
-| `GET /api/stream/counter` | Staff | SSE for new/changed orders. |
+| `GET /api/stream/counter` | Staff | SSE: `order` events `{orderId, status, queueNumber}` for new and changed orders, plus one `sync` event once the stream is listening, so a refetch then misses nothing. |
 
 ### Owner
 

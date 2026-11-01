@@ -38,7 +38,7 @@ describe("t()", () => {
     expect(t("counter.pinWrong", { n: 3 })).toBe(
       "PIN salah. Sisa percobaan: 3",
     );
-    expect(t("pin.progress", { entered: 2, total: 4 })).toBe("2 dari 4 digit");
+    expect(t("pin.progress", { entered: 2 })).toBe("2 digit dimasukkan");
   });
 
   it("throws when a placeholder has no value", () => {

@@ -4,6 +4,11 @@ import { AppError } from "@/lib/errors";
 import { newPublicToken } from "@/lib/ids";
 import { businessDate } from "@/lib/time";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
+import {
+  COUNTER_ROLES,
+  requireRole,
+  type SessionUser,
+} from "@/modules/auth/service";
 import { getOrderableItems, requireOrderingQr } from "@/modules/menu/service";
 import {
   cancelCharges,
@@ -396,5 +401,81 @@ export async function completeStaleReadyOrders({
       );
     }
     return completed.map((row) => row.id);
+  });
+}
+
+// Counter queue (FR-QF-02, S-02).
+
+export type QueueStatus = "paid" | "preparing" | "ready";
+
+export type CounterOrder = {
+  id: string;
+  queueNumber: number;
+  status: QueueStatus;
+  channel: "self_order" | "counter";
+  paidAt: Date;
+  preparingAt: Date | null;
+  readyAt: Date | null;
+  items: { name: string; quantity: number; options: string[] }[];
+};
+
+export async function listCounterQueue(
+  actor: SessionUser | null,
+): Promise<CounterOrder[]> {
+  requireRole(actor, COUNTER_ROLES);
+  const rows = await repo.selectCounterQueue();
+  const lines = await repo.selectLinesOfOrders(rows.map((row) => row.id));
+  // Paid orders always have a number and a payment time (orders checks).
+  return rows.map((row) => ({
+    ...row,
+    queueNumber: row.queueNumber!,
+    status: row.status as QueueStatus,
+    paidAt: row.paidAt!,
+    items: (lines.get(row.id) ?? []).map(({ name, quantity, options }) => ({
+      name,
+      quantity,
+      options,
+    })),
+  }));
+}
+
+const NEXT_STATUS: Partial<Record<OrderStatus, CounterStatus>> = {
+  paid: "preparing",
+  preparing: "ready",
+  ready: "completed",
+};
+export type CounterStatus = "preparing" | "ready" | "completed";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Start → Ready → Collected, one step at a time (Schema §5.3, BR-01). The
+// row lock makes a second tap on the same order wait and then see the new
+// status: it gets ORDER_STATUS_CHANGED with that status (Flow E18).
+export async function advanceOrderStatus(
+  actor: SessionUser | null,
+  input: { orderId: string; status: CounterStatus },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ status: CounterStatus; queueNumber: number | null }> {
+  requireRole(actor, COUNTER_ROLES);
+  if (!UUID.test(input.orderId)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(async (tx) => {
+    const order = await repo.lockOrder(input.orderId, tx);
+    if (!order) throw new AppError("NOT_FOUND");
+    if (NEXT_STATUS[order.status] !== input.status) {
+      throw new AppError("ORDER_STATUS_CHANGED", {
+        details: { status: order.status },
+      });
+    }
+    const queueNumber = await repo.setOrderStatus(
+      order.id,
+      input.status,
+      now,
+      tx,
+    );
+    await repo.notifyOrderEvents(
+      { orderId: order.id, status: input.status, queueNumber },
+      tx,
+    );
+    return { status: input.status, queueNumber };
   });
 }

@@ -385,6 +385,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `edge.orderNotFound.text` | Cek lagi tautannya atau tanya kasir |
 | `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
 | `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
+| `error.orderStatusChanged` | Status pesanan sudah berubah. Daftar diperbarui. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
@@ -398,6 +399,46 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.locked` | Akun terkunci {minutes} menit |
 | `counter.ownerPin` | Masukkan PIN pemilik untuk melanjutkan |
 | `counter.voidAction` | Batalkan pesanan |
+| `counter.chooseName` | Siapa yang bertugas sekarang? |
+| `counter.deviceLine` | {device} · perangkat terdaftar |
+| `counter.roleOwner` | Pemilik |
+| `counter.roleStaff` | Staf |
+| `counter.roleBarista` | Barista |
+| `counter.enterPin` | Masukkan PIN |
+| `counter.pinHint` | 4–6 digit |
+| `counter.notMe` | Bukan kamu? Ganti staf |
+| `counter.lockedUntil` | Terlalu banyak PIN salah. Coba lagi pukul {time}, atau minta pemilik mereset PIN kamu. |
+| `counter.otherStaff` | Pilih staf lain |
+| `counter.devRegister` | Daftarkan perangkat ini (mode pengembangan) |
+| `counter.staffMenu` | Menu staf |
+| `counter.lockIn` | Terkunci otomatis dalam {time} |
+| `counter.lockNow` | Kunci layar |
+| `counter.switchUser` | Ganti pengguna |
+| `counter.soundOn` | Suara aktif |
+| `counter.soundOff` | Suara mati |
+| `counter.newOrderBadge` | Pesanan baru! |
+| `counter.newOrderTitle` | Pesanan baru {number} |
+| `counter.newOrderMeta` | {n} item · dibayar {time} |
+| `counter.view` | Lihat |
+| `counter.posTitle` | Pesanan di kasir |
+| `counter.posSoon` | Pesanan langsung di kasir segera tersedia di sini. |
+| `counter.queue` | Antrean |
+| `counter.queueMeta` | {n} aktif · terlama di atas |
+| `counter.filterLabel` | Saring antrean |
+| `counter.filterAll` | Semua |
+| `counter.filterPaid` | Baru |
+| `counter.filterPreparing` | Diproses |
+| `counter.filterReady` | Siap |
+| `counter.orderLabel` | Pesanan {number} |
+| `counter.age` | {n} mnt |
+| `counter.ageJustNow` | baru saja |
+| `counter.oldest` | Paling lama |
+| `counter.emptyQueue` | Belum ada pesanan. Pesanan yang sudah dibayar muncul di sini. |
+| `counter.emptyFilter` | Tidak ada pesanan dengan status ini. |
+| `counter.lockedTitle` | Layar terkunci |
+| `counter.lockedWho` | {name} · tidak aktif 3 menit |
+| `counter.waitingSoundOn` | {n} pesanan baru menunggu · suara tetap aktif |
+| `counter.waitingSoundOff` | {n} pesanan baru menunggu · suara mati |
 | `board.preparing` | Sedang disiapkan |
 | `board.ready` | Siap diambil |
 | `board.empty` | Belum ada pesanan |
@@ -412,7 +453,8 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `chip.voided` | Dibatalkan |
 | `pin.delete` | Hapus |
 | `pin.keypad` | Papan PIN |
-| `pin.progress` | {entered} dari {total} digit |
+| `pin.progress` | {entered} digit dimasukkan |
+| `pin.submit` | Masuk |
 | `common.close` | Tutup |
 | `common.loading` | Memuat… |
 | `common.retry` | Coba lagi |

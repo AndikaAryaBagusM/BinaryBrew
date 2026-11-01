@@ -14,6 +14,8 @@ export const pinLoginBody = z.strictObject({
   pin,
 });
 
+export const unlockBody = z.strictObject({ pin });
+
 export const elevateBody = z.strictObject({
   pin,
   scope: z.enum(elevationScopes),

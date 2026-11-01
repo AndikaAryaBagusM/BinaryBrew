@@ -33,6 +33,9 @@ export const elevationScopes = [
 ] as const;
 export type ElevationScope = (typeof elevationScopes)[number];
 
+// Everyone who works the Counter (S-01..S-08).
+export const COUNTER_ROLES = ["owner", "staff", "barista"] as const;
+
 export const SESSION_MAX_AGE_MS = 12 * 60 * 60_000;
 const SESSION_IDLE_MS = 8 * 60 * 60_000;
 const SESSION_TOUCH_INTERVAL_MS = 60_000;
@@ -241,12 +244,41 @@ export async function pinLogin(
   return createSession(user, device.id, now);
 }
 
+// Auto-lock (Tech §9, Flow E11): the Counter locks itself after 3 idle
+// minutes and the signed-in user unlocks it with their own PIN. The session
+// stays; a wrong PIN counts toward the same lockout as PIN login.
+export async function unlock(
+  actor: SessionUser | null,
+  input: { pin: string; ip: string },
+  { now = new Date() }: Clock = {},
+): Promise<void> {
+  const signedIn = requireRole(actor, COUNTER_ROLES);
+  const ms = now.getTime();
+  if (pinFailuresByIp.isLimited(input.ip, ms))
+    throw new AppError("RATE_LIMITED");
+  const user = await repo.findUserById(signedIn.userId);
+  if (!user || !user.isActive) throw new AppError("UNAUTHENTICATED");
+  try {
+    await verifyPin([user], input.pin, now);
+  } catch (error) {
+    pinFailuresByIp.hit(input.ip, ms);
+    throw error;
+  }
+}
+
 // Names for the S-01 picker: only on a registered device, only what it shows.
 export async function listPinUsers(deviceToken: string | undefined) {
   if (!(await findRegisteredDevice(deviceToken))) {
     throw new AppError("DEVICE_NOT_REGISTERED");
   }
   return repo.listActiveUsers();
+}
+
+// S-01 page: the device line and the name tiles, in one check.
+export async function counterSignIn(deviceToken: string | undefined) {
+  const device = await findRegisteredDevice(deviceToken);
+  if (!device) throw new AppError("DEVICE_NOT_REGISTERED");
+  return { deviceName: device.name, users: await repo.listActiveUsers() };
 }
 
 export async function getSession(
