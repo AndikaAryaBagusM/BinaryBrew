@@ -451,8 +451,9 @@ export const refunds = pgTable(
     amount: integer("amount").notNull(),
     reason: text("reason").notNull(),
     status: refundStatus("status").notNull().default("requested"),
-    requestedBy: uuid("requested_by").notNull(),
-    approvedBy: uuid("approved_by").notNull(),
+    // Null when the system requested it (late payment, Schema §5.2).
+    requestedBy: uuid("requested_by"),
+    approvedBy: uuid("approved_by"),
     gatewayRef: text("gateway_ref"),
     createdAt: createdAt(),
     processedAt: timestamptz("processed_at"),

@@ -5,8 +5,8 @@ import { clientToken, createOrderBody } from "@/modules/orders/schemas";
 import { checkOrderRateLimit, createSelfOrder } from "@/modules/orders/service";
 
 // Self-order checkout (Tech §6). 201 for a new order, 200 when a retried
-// request with the same Idempotency-Key returns the existing one. The payment
-// charge is added in P1-07.
+// request with the same Idempotency-Key returns the existing one, both with
+// the order's QRIS charge.
 export const POST = route(async (request) => {
   assertSameOrigin(request);
   const idempotencyKey = request.headers.get("idempotency-key");
@@ -18,7 +18,7 @@ export const POST = route(async (request) => {
   const body = await readJson(request, createOrderBody);
   checkOrderRateLimit(clientIp(request), body.clientSession);
 
-  const { order, replayed } = await createSelfOrder({
+  const { order, payment, replayed } = await createSelfOrder({
     ...body,
     idempotencyKey,
   });
@@ -28,6 +28,13 @@ export const POST = route(async (request) => {
       status: order.status,
       total: order.total,
       expiresAt: order.expiresAt.toISOString(),
+      // The id is used only by the mock provider's "simulate paid" button.
+      payment: payment && {
+        id: payment.id,
+        qrString: payment.qrString,
+        amount: payment.amount,
+        expiresAt: payment.expiresAt?.toISOString() ?? null,
+      },
     },
     { status: replayed ? 200 : 201, headers: { "Cache-Control": "no-store" } },
   );

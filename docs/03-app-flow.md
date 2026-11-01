@@ -311,7 +311,7 @@ Clients fall back to polling every 10 seconds if the stream is down.
 | E1 | Customer double-taps Pay | Idempotency key returns the same order and charge. |
 | E2 | Customer closes the tab after paying | Order continues normally; reopen from "Pesanan saya" (stored token) or watch the board for the number. |
 | E3 | Customer pays after the countdown ended | Late payment rule: revive if items are available, otherwise automatic refund request; owner is alerted. |
-| E4 | Customer pays twice for one order | Second payment has no matching pending charge → logged, refund request created, owner alerted. |
+| E4 | Customer pays twice for one order | Each order has one dynamic charge, which the gateway accepts once. Another paid event for a paid order changes nothing and is logged as a warning; if the gateway shows a real second payment, the owner refunds it through the void/refund flow (Phase 3). |
 | E5 | Webhook is delivered twice or out of order | Idempotent by `(provider, event_id)`; state only moves forward. |
 | E6 | Price changed between menu load and checkout | Server returns new prices; customer must confirm the new total before the QR is shown. |
 | E7 | Item deactivated or sold out between cart and checkout | Checkout is rejected with the item names; cart is corrected. |

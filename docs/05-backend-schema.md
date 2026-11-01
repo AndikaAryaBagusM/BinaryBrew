@@ -347,12 +347,13 @@ create table refunds (
   amount       integer not null check (amount > 0),
   reason       text not null,
   status       refund_status not null default 'requested',
-  requested_by uuid not null references users(id),
-  approved_by  uuid not null references users(id),             -- must have role owner (enforced in app)
+  requested_by uuid references users(id),                       -- null: requested by the system (late payment, §5.2)
+  approved_by  uuid references users(id),                       -- must have role owner (enforced in app)
   gateway_ref  text,
   created_at   timestamptz not null default now(),
   processed_at timestamptz,
-  constraint refunds_processed_has_time check (status <> 'processed' or processed_at is not null)
+  constraint refunds_processed_has_time check (status <> 'processed' or processed_at is not null),
+  constraint refunds_processed_has_approver check (status <> 'processed' or approved_by is not null)
 );
 create index refunds_order_idx on refunds (order_id);
 
@@ -619,17 +620,17 @@ All multi-step changes happen inside one database transaction. Lock rows in a fi
 2. Lock on the client (`pg_advisory_xact_lock` on `client_session`). If an order with the same `(client_session, idempotency_key)` exists, return it unchanged. Otherwise check the client's open unpaid orders (BR-11): `awaiting_payment` with `expires_at` still in the future.
 3. Load menu items, modifier options and settings; **ignore any prices from the client**.
 4. Validate modifier min/max per group and availability (`v_menu_item_availability` plus modifier ingredient deltas against `ingredients.stock_qty`). If anything is unavailable, abort with the list of items.
-5. Calculate `subtotal`, `service_charge = round(subtotal × service_charge_bps / 10000)`, `total = subtotal + service_charge`, `tax_amount = round(total × tax_rate_bps / (10000 + tax_rate_bps))` (inclusive tax). If `tax_inclusive` is false, tax is added on top: `tax_amount = round((subtotal + service_charge) × tax_rate_bps / 10000)`, `total = subtotal + service_charge + tax_amount`. Rounding is half-up (`src/lib/money.ts`). A line whose unit price plus option deltas is below zero is refused.
+5. Calculate `subtotal`, `service_charge = round(subtotal × service_charge_bps / 10000)`, `total = subtotal + service_charge`, `tax_amount = round(total × tax_rate_bps / (10000 + tax_rate_bps))` (inclusive tax). If `tax_inclusive` is false, tax is added on top: `tax_amount = round((subtotal + service_charge) × tax_rate_bps / 10000)`, `total = subtotal + service_charge + tax_amount`. Rounding is half-up (`src/lib/money.ts`). A line whose unit price plus option deltas is below zero is refused, and so is a self-order whose total is zero (QRIS cannot charge it; `details.reason` `zero_total`).
 6. Insert `orders` (status `awaiting_payment`, `expires_at = now() + expiry`, new `public_token`, `business_date`), `order_items`, `order_item_modifiers` (with snapshots).
-7. Call the payment provider to create the charge; insert `payments` (`pending`, `qris_dynamic`). If the provider call fails, roll back.
+7. After commit, call the payment provider to create the charge (idempotency key = order id) and insert `payments` (`pending`, `qris_dynamic`). No gateway call runs while locks are held. If the call fails, the request fails; a retry with the same key returns the order and creates the missing charge. An order that never gets a charge expires through the sweep (§5.3).
 
 ### 5.2 Mark paid (webhook, or manual confirmation)
 
-1. Webhook: verify signature, insert into `payment_events` (`on conflict do nothing`); if no row was inserted the event is a duplicate, so stop with success.
+1. Webhook: verify signature, insert into `payment_events` (`on conflict do nothing`); if no row was inserted the event is a duplicate, so stop with success. The insert and steps 2–7 run in **one transaction**, which also sets `processed_at` and `outcome`. If processing fails, the event is not kept either: the webhook answers 5xx and the gateway's retry is processed again. An unknown `provider_ref` is kept with outcome `unknown_reference` and logged as an error. `expired` and `failed` events are kept with outcome `noted` and change nothing (the sweep in §5.3 owns expiry).
 2. `select … from orders where id = $1 for update`.
-3. If the order is `awaiting_payment`: continue. If `expired`: re-check availability; if available, revive (continue), else set the payment `paid`, insert a `refunds` row (`requested`, reason "paid after expiry, item unavailable") and alert the owner (PRD FR-PM-07). If already paid or later: do nothing.
+3. If the order is `awaiting_payment`: continue. If `expired`: re-check availability; if available, revive (continue), else set the payment `paid`, insert a `refunds` row (`requested`, reason "paid after expiry, item unavailable") and alert the owner (PRD FR-PM-07). If the payment is already `paid` or `refunded`, or the order is paid or later: do nothing (outcome `already_paid`, logged as a warning). The system-created refund has `requested_by` null and writes an `audit_logs` row `refund.request` with a null actor; until the owner dashboard lists open refunds, the alert is a warning log.
 4. Update `payments` to `paid` with `paid_at`.
-5. `queue_number = next_queue_number(business_date)`; update order to `paid`, set `paid_at`.
+5. `queue_number = next_queue_number(business_date)`, using the order's own business day (also when a late payment revives it); update order to `paid`, set `paid_at`.
 6. (Phase 2) For each order line and modifier, compute ingredient quantities × order quantity; insert `stock_movements` of type `sale_deduction`, update `ingredients.stock_qty`; compute `order_items.unit_cogs` from current `avg_cost`.
 7. Write `audit_logs` for manual confirmations. Emit `NOTIFY order_events` after commit.
 

@@ -102,3 +102,22 @@ export function route(
     }
   };
 }
+
+// The second route handler argument; params holds the dynamic segments.
+export type RouteContext<P> = { params: Promise<P> };
+
+// route() for a path with dynamic segments.
+export function routeWithParams<P>(
+  handler: (
+    request: NextRequest,
+    context: RouteContext<P>,
+  ) => Promise<NextResponse>,
+) {
+  return async (request: NextRequest, context: RouteContext<P>) => {
+    try {
+      return await handler(request, context);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  };
+}

@@ -83,3 +83,52 @@ export async function insertOrderItemModifiers(
 ) {
   if (values.length > 0) await db.insert(orderItemModifiers).values(values);
 }
+
+export async function lockOrder(id: string, db: DbExecutor) {
+  const [row] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      businessDate: orders.businessDate,
+    })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .for("update");
+  return row;
+}
+
+export async function selectOrderMenuItemIds(orderId: string, db: DbExecutor) {
+  const rows = await db
+    .select({ menuItemId: orderItems.menuItemId })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+  return rows.map((row) => row.menuItemId);
+}
+
+// next_queue_number() locks the day's counter row until commit, so parallel
+// payments get unique, gapless numbers (BR-04).
+export async function markOrderPaid(
+  id: string,
+  businessDate: string,
+  now: Date,
+  db: DbExecutor,
+): Promise<number> {
+  const [row] = await db
+    .update(orders)
+    .set({
+      status: "paid",
+      paidAt: now,
+      queueNumber: sql`next_queue_number(${businessDate}::date)`,
+      updatedAt: now,
+    })
+    .where(eq(orders.id, id))
+    .returning({ queueNumber: orders.queueNumber });
+  return row!.queueNumber!;
+}
+
+// Delivered to listeners when the transaction commits (Tech §7).
+export async function notifyOrderEvents(payload: object, db: DbExecutor) {
+  await db.execute(
+    sql`select pg_notify('order_events', ${JSON.stringify(payload)})`,
+  );
+}
