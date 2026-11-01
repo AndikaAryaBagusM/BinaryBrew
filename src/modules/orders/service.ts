@@ -357,3 +357,44 @@ export async function expireOrder(
   );
   return providerRefs;
 }
+
+// Sweep (Schema §5.3, FR-PM-04). Each order is its own transaction; one held
+// by a payment in progress is skipped and seen again on the next run, and a
+// payment that arrives after expiry follows the late-payment rule. Returns
+// the expired order ids.
+export async function expireOverdueOrders({
+  now = new Date(),
+}: { now?: Date } = {}): Promise<string[]> {
+  const expired: string[] = [];
+  for (const id of await repo.selectOverdueOrderIds(now, getDb())) {
+    const providerRefs = await getDb().transaction(async (tx) => {
+      if (!(await repo.lockOverdueOrder(id, now, tx))) return null;
+      return expireOrder(id, now, tx);
+    });
+    if (!providerRefs) continue;
+    expired.push(id);
+    await cancelCharges(providerRefs);
+  }
+  return expired;
+}
+
+// Sweep (Schema §5.3, FR-QF-05): Ready orders nobody marked collected.
+// Returns the completed order ids.
+export async function completeStaleReadyOrders({
+  now = new Date(),
+}: { now?: Date } = {}): Promise<string[]> {
+  const { ready_auto_complete_minutes: minutes } = await getSettings([
+    "ready_auto_complete_minutes",
+  ]);
+  const readyBefore = new Date(now.getTime() - minutes * 60_000);
+  return getDb().transaction(async (tx) => {
+    const completed = await repo.markReadyOrdersCompleted(readyBefore, now, tx);
+    for (const { id, queueNumber } of completed) {
+      await repo.notifyOrderEvents(
+        { orderId: id, status: "completed", queueNumber },
+        tx,
+      );
+    }
+    return completed.map((row) => row.id);
+  });
+}

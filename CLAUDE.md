@@ -35,12 +35,12 @@ Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job. Exact versions
 ## Commands
 - Install: `npm install` (also enables the pre-commit hook), then copy `.env.example` to `.env` and fill it in
 - Database: `npm run db:setup` (= `db:up` + `db:migrate` + `db:seed`; Docker Desktop must be running)
-- Dev server: `npm run dev`
+- Dev server: `npm run dev`, plus `npm run worker` in a second terminal (expires unpaid orders and completes uncollected Ready orders every 30 s)
 - Tests: `npm test` (unit + integration; integration needs the database), `npm run test:unit` (no database), `npm run test:e2e` (Playwright, own dev server on port 3100 and database `*_e2e_test`; stop `npm run dev` first; not part of `verify`)
 - Checks: `npm run typecheck`, `npm run lint`, `npm run format:check`
 - Before every commit: `npm run verify` (typecheck, lint, format check, all tests)
 - Schema change: `npm run db:generate -- --name=<what_changed>`, review the SQL, `npm run db:migrate`
-- Later tasks add: `worker`, `reco:run` (P1-15), `seed:orders` (P1-14)
+- Later tasks add: `reco:run` (P1-15), `seed:orders` (P1-14)
 
 ## Definition of done
 `npm run verify` passes; new behaviour has tests; docs updated if a rule, route or table changed;

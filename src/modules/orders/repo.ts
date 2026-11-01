@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
 import { orderItemModifiers, orderItems, orders, qrTokens } from "@/db/schema";
 
@@ -217,4 +217,47 @@ export async function markOrderExpired(id: string, now: Date, db: DbExecutor) {
     .update(orders)
     .set({ status: "expired", updatedAt: now })
     .where(eq(orders.id, id));
+}
+
+// Sweep (Schema §5.3): unpaid orders whose payment time has passed.
+export async function selectOverdueOrderIds(now: Date, db: DbExecutor) {
+  const rows = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(eq(orders.status, "awaiting_payment"), lte(orders.expiresAt, now)),
+    )
+    .orderBy(asc(orders.expiresAt));
+  return rows.map((row) => row.id);
+}
+
+// Locks the order only if it is still overdue and nobody else holds it (a
+// payment in progress); otherwise returns nothing.
+export async function lockOverdueOrder(id: string, now: Date, db: DbExecutor) {
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.id, id),
+        eq(orders.status, "awaiting_payment"),
+        lte(orders.expiresAt, now),
+      ),
+    )
+    .for("update", { skipLocked: true });
+  return row;
+}
+
+// One statement, so each row is locked and its status checked again before
+// it changes.
+export async function markReadyOrdersCompleted(
+  readyBefore: Date,
+  now: Date,
+  db: DbExecutor,
+) {
+  return db
+    .update(orders)
+    .set({ status: "completed", completedAt: now, updatedAt: now })
+    .where(and(eq(orders.status, "ready"), lte(orders.readyAt, readyBefore)))
+    .returning({ id: orders.id, queueNumber: orders.queueNumber });
 }
