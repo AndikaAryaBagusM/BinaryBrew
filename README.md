@@ -50,6 +50,8 @@ database answers and `503` when it does not.
 
 The first `db:up` also creates the `binarybrew_test` database used by integration tests.
 Integration tests reset and migrate that database on every run; they never touch `binarybrew`.
+Each run also clones it, still empty, to `binarybrew_empty_test` for tests that need an empty
+database. The integration files run one at a time because they share the test database.
 
 ## Database changes
 

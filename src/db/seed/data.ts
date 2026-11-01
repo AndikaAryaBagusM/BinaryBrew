@@ -1,29 +1,8 @@
 // Seed content (Schema §7, Plan §7). Menu names are placeholders until the
 // real menu is known (PRD Q2); prices are whole rupiah.
 
-// Schema §3.9 default settings.
-export const defaultSettings: Record<string, unknown> = {
-  shop_name: "Binary Brew",
-  timezone: "Asia/Jakarta",
-  business_day_cutoff: "04:00",
-  ordering_enabled: true,
-  tax_rate_bps: 0,
-  tax_inclusive: true,
-  service_charge_bps: 0,
-  order_expiry_minutes: 10,
-  ready_auto_complete_minutes: 30,
-  cash_enabled: false,
-  manual_payment_requires_owner_pin: true,
-  reco_min_support: 0.02,
-  reco_min_confidence: 0.25,
-  reco_min_lift: 1.05,
-  reco_min_orders: 300,
-  reco_promote_weight: 0.5,
-  reco_margin_weight: 0.25,
-  reco_max_items: 2,
-  low_margin_threshold_pct: 30,
-  order_retention_months: 24,
-};
+// Schema §3.9 default settings, defined once in the settings module.
+export { defaultSettings } from "@/modules/settings/definitions";
 
 export const ownerName = "Pemilik";
 export const staffNames = ["Rina", "Dimas"] as const;

@@ -2,14 +2,17 @@ import { asc, eq, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import type { DbTransaction } from "@/db/client";
 import * as schema from "@/db/schema";
 import * as data from "@/db/seed/data";
-import type { DbTransaction } from "@/db/client";
 import { seedDatabase } from "@/db/seed/seed";
 import { newSecretToken } from "@/lib/ids";
 import { hashToken, verifySecret } from "@/modules/auth/hashing";
+import { emptyTestDatabaseUrl } from "../integration/databases";
 
-const client = postgres(process.env.TEST_DATABASE_URL!, { max: 1 });
+const client = postgres(emptyTestDatabaseUrl(process.env.TEST_DATABASE_URL!), {
+  max: 1,
+});
 const db = drizzle(client, { schema });
 afterAll(() => client.end());
 
@@ -22,28 +25,12 @@ const input = {
   tokenHashPepper: "ab".repeat(32),
 };
 
-// Runs fn in a transaction that is always rolled back, so the shared test
-// database is unchanged for the other test files. It starts by emptying the
-// tables the seed fills (other files leave users and devices behind), so each
-// test sees an empty database.
+// Runs fn in a transaction that is always rolled back, on the empty test
+// database (other integration files leave users, devices and audit rows in the
+// shared one), so every test starts from an empty database.
 async function inRollback(fn: (tx: DbTransaction) => Promise<void>) {
   try {
     await db.transaction(async (tx) => {
-      for (const table of [
-        schema.menuItemModifierGroups,
-        schema.menuItems,
-        schema.modifierOptions,
-        schema.modifierGroups,
-        schema.categories,
-        schema.qrTokens,
-        schema.settings,
-        schema.elevations,
-        schema.sessions,
-        schema.devices,
-        schema.users,
-      ]) {
-        await tx.delete(table);
-      }
       await fn(tx);
       tx.rollback();
     });
