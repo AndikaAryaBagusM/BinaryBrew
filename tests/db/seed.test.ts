@@ -4,7 +4,8 @@ import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
 import * as schema from "@/db/schema";
 import * as data from "@/db/seed/data";
-import { type DbTransaction, seedDatabase } from "@/db/seed/seed";
+import type { DbTransaction } from "@/db/client";
+import { seedDatabase } from "@/db/seed/seed";
 import { newSecretToken } from "@/lib/ids";
 import { hashToken, verifySecret } from "@/modules/auth/hashing";
 
@@ -22,10 +23,27 @@ const input = {
 };
 
 // Runs fn in a transaction that is always rolled back, so the shared test
-// database stays empty for the other test files.
+// database is unchanged for the other test files. It starts by emptying the
+// tables the seed fills (other files leave users and devices behind), so each
+// test sees an empty database.
 async function inRollback(fn: (tx: DbTransaction) => Promise<void>) {
   try {
     await db.transaction(async (tx) => {
+      for (const table of [
+        schema.menuItemModifierGroups,
+        schema.menuItems,
+        schema.modifierOptions,
+        schema.modifierGroups,
+        schema.categories,
+        schema.qrTokens,
+        schema.settings,
+        schema.elevations,
+        schema.sessions,
+        schema.devices,
+        schema.users,
+      ]) {
+        await tx.delete(table);
+      }
       await fn(tx);
       tx.rollback();
     });

@@ -329,6 +329,13 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.itemSoldOut` | Maaf, ada menu yang habis |
 | `error.priceChanged` | Harga diperbarui |
 | `error.generic` | Ada gangguan, coba lagi |
+| `error.validation` | Data yang dikirim tidak valid |
+| `auth.loginFailed` | Email atau kata sandi salah |
+| `auth.signInRequired` | Silakan masuk terlebih dahulu |
+| `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
+| `auth.deviceNotRegistered` | Perangkat ini belum terdaftar. Minta pemilik untuk mendaftarkannya. |
+| `auth.elevationRequired` | Perlu konfirmasi PIN pemilik |
+| `auth.rateLimited` | Terlalu banyak percobaan. Coba lagi nanti. |
 | `counter.start` | Mulai |
 | `counter.ready` | Siap |
 | `counter.collected` | Diambil |

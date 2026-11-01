@@ -191,6 +191,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | Method and path | Auth | Purpose |
 |---|---|---|
 | `POST /api/auth/owner-login` | Public + rate limit | Email and password. |
+| `GET /api/auth/pin-users` | Registered device | Active users (id, name, role only) for the S-01 name picker. |
 | `POST /api/auth/pin-login` | Registered device + rate limit | `userId` + PIN. |
 | `POST /api/auth/logout` | Staff | End session. |
 | `POST /api/auth/elevate` | Staff | Owner PIN → short-lived elevation for one scope. |
@@ -258,7 +259,7 @@ export interface PaymentProvider {
 
 ### Sessions and devices
 
-- Opaque random 256-bit tokens in `HttpOnly`, `SameSite=Lax` (`Secure` when served over HTTPS) cookies. Only a keyed hash (HMAC with `TOKEN_HASH_PEPPER`) is stored in `sessions.token_hash` / `devices.token_hash`.
+- Opaque random 256-bit tokens in `HttpOnly`, `SameSite=Lax` (`Secure` when served over HTTPS) cookies: `bb_session` (12 hours) and `bb_device` (400 days, the browser maximum). Only a keyed hash (HMAC with `TOKEN_HASH_PEPPER`) is stored in `sessions.token_hash` / `devices.token_hash`.
 - **Owner:** email + password (argon2id); rate limit 5 failures per 15 minutes per account and per IP.
 - **Staff / barista:** the counter device must be registered (device cookie matched to `devices`); the user taps their name, enters a 4–6 digit PIN. 5 wrong PINs lock that user for 5 minutes. PIN login is rejected on unregistered browsers.
 - **Auto-lock:** the client locks after 3 idle minutes (PIN again, same session); the server expires sessions after 12 hours or 8 hours of inactivity.
@@ -349,7 +350,7 @@ Definition of done for any task: typecheck, lint, tests pass locally; new behavi
 
 ## 13. Tooling and workflow
 
-- Git: `main` always runnable; short-lived branches `feat/…`, `fix/…`; Conventional Commits; squash merge via GitHub pull requests (self-reviewed with the PR checklist in the plan).
+- Git: `main` always runnable; short-lived branches `feat/…`, `fix/…`; Conventional Commits; merge commits via GitHub pull requests (one branch per task from `main`, never stacked) (self-reviewed with the PR checklist in the plan).
 - No GitHub Actions or hosting at this stage (D8); pre-commit hooks run lint, typecheck and unit tests, and `npm run verify` runs everything before merging.
 - Migrations are forward-only SQL files, never edited after merge.
 - `CLAUDE.md` in the repo root tells Claude Code the rules in this document (see the implementation plan).

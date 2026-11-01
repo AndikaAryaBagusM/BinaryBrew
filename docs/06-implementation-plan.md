@@ -236,6 +236,6 @@ Keep this table up to date at the end of each session.
 | Phase | Tasks done | Notes |
 |---|---|---|
 | 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
-| 1 | 0 / 17 | |
+| 1 | 1 / 17 | P1-01 ✔ |
 | 2 | 0 / 8 | |
 | 3 | 0 / 8 | |
