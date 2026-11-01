@@ -1,6 +1,6 @@
-import { and, count, eq, gt, sql } from "drizzle-orm";
-import type { DbExecutor } from "@/db/client";
-import { orderItemModifiers, orderItems, orders } from "@/db/schema";
+import { and, asc, count, eq, gt, inArray, sql } from "drizzle-orm";
+import { type DbExecutor, getDb } from "@/db/client";
+import { orderItemModifiers, orderItems, orders, qrTokens } from "@/db/schema";
 
 // SQL only; rules live in service.ts.
 
@@ -131,4 +131,90 @@ export async function notifyOrderEvents(payload: object, db: DbExecutor) {
   await db.execute(
     sql`select pg_notify('order_events', ${JSON.stringify(payload)})`,
   );
+}
+
+// The order behind a status link, with its table's QR token while that code
+// is still active.
+export async function selectByPublicToken(
+  publicToken: string,
+  db: DbExecutor = getDb(),
+) {
+  const [row] = await db
+    .select({
+      id: orders.id,
+      publicToken: orders.publicToken,
+      status: orders.status,
+      queueNumber: orders.queueNumber,
+      createdAt: orders.createdAt,
+      paidAt: orders.paidAt,
+      expiresAt: orders.expiresAt,
+      subtotal: orders.subtotal,
+      serviceCharge: orders.serviceCharge,
+      taxAmount: orders.taxAmount,
+      taxInclusive: orders.taxInclusive,
+      total: orders.total,
+      qrToken: qrTokens.token,
+    })
+    .from(orders)
+    .leftJoin(
+      qrTokens,
+      and(eq(qrTokens.id, orders.qrTokenId), eq(qrTokens.isActive, true)),
+    )
+    .where(eq(orders.publicToken, publicToken));
+  return row;
+}
+
+export async function selectOrderLines(
+  orderId: string,
+  db: DbExecutor = getDb(),
+) {
+  const items = await db
+    .select({
+      id: orderItems.id,
+      name: orderItems.nameSnapshot,
+      quantity: orderItems.quantity,
+      lineTotal: orderItems.lineTotal,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(asc(orderItems.position), asc(orderItems.id));
+  const options =
+    items.length === 0
+      ? []
+      : await db
+          .select({
+            orderItemId: orderItemModifiers.orderItemId,
+            name: orderItemModifiers.optionNameSnapshot,
+          })
+          .from(orderItemModifiers)
+          .where(
+            inArray(
+              orderItemModifiers.orderItemId,
+              items.map((item) => item.id),
+            ),
+          )
+          .orderBy(
+            asc(orderItemModifiers.position),
+            asc(orderItemModifiers.id),
+          );
+  return items.map(({ id, ...item }) => ({
+    ...item,
+    options: options.filter((o) => o.orderItemId === id).map((o) => o.name),
+  }));
+}
+
+export async function lockByPublicToken(publicToken: string, db: DbExecutor) {
+  const [row] = await db
+    .select({ id: orders.id, status: orders.status, channel: orders.channel })
+    .from(orders)
+    .where(eq(orders.publicToken, publicToken))
+    .for("update");
+  return row;
+}
+
+export async function markOrderExpired(id: string, now: Date, db: DbExecutor) {
+  await db
+    .update(orders)
+    .set({ status: "expired", updatedAt: now })
+    .where(eq(orders.id, id));
 }

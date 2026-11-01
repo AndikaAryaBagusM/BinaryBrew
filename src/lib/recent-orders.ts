@@ -42,7 +42,7 @@ export function readRecentOrders(
     .slice(0, MAX_ORDERS);
 }
 
-// Called after checkout (P1-06). Never throws: losing the list is acceptable.
+// Called after checkout (C-03). Never throws: losing the list is acceptable.
 export function rememberOrder(
   storage: KeyValueStorage,
   publicToken: string,

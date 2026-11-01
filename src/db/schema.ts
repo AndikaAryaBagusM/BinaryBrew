@@ -365,6 +365,8 @@ export const orderItems = pgTable(
     quantity: smallint("quantity").notNull(),
     lineTotal: integer("line_total").notNull(),
     unitCogs: integer("unit_cogs"),
+    // Order of the lines as the customer chose them (receipt, status page).
+    position: smallint("position").notNull().default(0),
   },
   (t) => [
     fk("order_items", t.orderId, orders.id).onDelete("cascade"),
@@ -383,6 +385,7 @@ export const orderItemModifiers = pgTable(
     groupNameSnapshot: text("group_name_snapshot").notNull(),
     optionNameSnapshot: text("option_name_snapshot").notNull(),
     priceDeltaSnapshot: integer("price_delta_snapshot").notNull().default(0),
+    position: smallint("position").notNull().default(0),
     ingredientDeltas: jsonb("ingredient_deltas")
       .notNull()
       .default(sql`'[]'::jsonb`),

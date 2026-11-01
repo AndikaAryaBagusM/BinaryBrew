@@ -18,12 +18,14 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | Package                  | Version |
 | ------------------------ | ------- |
 | `@radix-ui/react-dialog` | 1.3.1   |
+| `@tanstack/react-query`  | 5.104.5 |
 | `argon2`                 | 0.45.1  |
 | `drizzle-orm`            | 0.45.4  |
 | `lucide-react`           | 1.58.0  |
 | `next`                   | 16.4.2  |
 | `pino`                   | 10.4.0  |
 | `postgres`               | 3.4.9   |
+| `qrcode`                 | 1.5.4   |
 | `react`                  | 19.3.0  |
 | `react-dom`              | 19.3.0  |
 | `zod`                    | 4.6.7   |
@@ -35,6 +37,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | `@playwright/test`       | 1.64.1  |
 | `@tailwindcss/turbopack` | 4.3.3   |
 | `@types/node`            | 24.19.2 |
+| `@types/qrcode`          | 1.5.6   |
 | `@types/react`           | 19.3.0  |
 | `@types/react-dom`       | 19.3.0  |
 | `drizzle-kit`            | 0.31.11 |

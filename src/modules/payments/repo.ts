@@ -7,6 +7,7 @@ import { paymentEvents, payments, refunds } from "@/db/schema";
 const chargeColumns = {
   id: payments.id,
   orderId: payments.orderId,
+  method: payments.method,
   status: payments.status,
   amount: payments.amount,
   provider: payments.provider,
@@ -120,4 +121,20 @@ export async function insertRefund(
 ) {
   const [row] = await db.insert(refunds).values(values).returning();
   return row!;
+}
+
+// The caller holds the order lock (orders before payments).
+export async function expirePendingPayments(
+  orderId: string,
+  now: Date,
+  db: DbExecutor,
+) {
+  return db
+    .update(payments)
+    .set({ status: "expired", updatedAt: now })
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "pending")))
+    .returning({
+      provider: payments.provider,
+      providerRef: payments.providerRef,
+    });
 }

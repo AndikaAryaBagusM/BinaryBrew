@@ -87,6 +87,8 @@ Notes:
 - The cart lives in the browser (`sessionStorage`); nothing is saved on the server until checkout.
 - The browser remembers the last few `publicToken`s in `localStorage` so a customer who closes the tab can reopen their order (the page shows a "Pesanan saya" list on C-01).
 - Between pay and Ready the customer can only watch; there is no edit or cancel (BR-06).
+- Before paying, "Kembali ke keranjang" on C-05 expires the unpaid order at once (it stops counting toward the 3-order cap, BR-11) and returns to the cart, which is kept. The cart is emptied when the order is paid.
+- C-05 and C-06 are one page (`/s/{publicToken}`) that switches when the payment arrives; it listens to SSE and polls every 10 seconds.
 
 ## 4. Payment sequence
 
