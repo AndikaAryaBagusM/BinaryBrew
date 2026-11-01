@@ -355,6 +355,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `edge.closed.title` | Pemesanan sedang ditutup |
 | `edge.closed.text` | Kamu tetap bisa pesan langsung di kasir |
 | `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
+| `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |

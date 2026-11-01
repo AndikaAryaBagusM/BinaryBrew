@@ -1,6 +1,6 @@
-import { getDb } from "@/db/client";
+import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
-import type { PricingRates } from "@/modules/orders/pricing";
+import type { PricingItem, PricingRates } from "@/modules/orders/pricing";
 import { getSettings } from "@/modules/settings/service";
 import * as repo from "./repo";
 
@@ -127,4 +127,57 @@ function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
     else map.set(key(row), [row]);
   }
   return map;
+}
+
+// Checkout (Schema §5.1 step 1): the same QR and "ordering on" rules as the
+// menu. Returns the QR code's id for the order.
+export async function requireOrderingQr(
+  qrToken: string,
+): Promise<{ qrTokenId: string }> {
+  if (!QR_TOKEN.test(qrToken)) throw new AppError("QR_INVALID");
+  const [qr, ordering] = await Promise.all([
+    repo.selectActiveQr(qrToken),
+    getSettings(["ordering_enabled"]),
+  ]);
+  if (!qr) throw new AppError("QR_INVALID");
+  if (!ordering.ordering_enabled) throw new AppError("ORDERING_CLOSED");
+  return { qrTokenId: qr.id };
+}
+
+export type OrderableItem = PricingItem & { isAvailable: boolean };
+
+// Checkout (Schema §5.1 steps 3-4): current prices, active modifier groups and
+// availability for the requested items, read inside the caller's transaction.
+// Ids that do not exist are left out. Availability uses the manual flag until
+// P2-03 adds stock.
+export async function getOrderableItems(
+  ids: readonly string[],
+  db: DbExecutor,
+): Promise<OrderableItem[]> {
+  const items = await repo.selectItemsForOrder([...new Set(ids)], db);
+  const links = await repo.selectItemGroups(
+    items.map((item) => item.id),
+    db,
+  );
+  const options = await repo.selectActiveOptions(
+    [...new Set(links.map((link) => link.id))],
+    db,
+  );
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    isAvailable: item.isActive && item.categoryActive && !item.manualSoldOut,
+    modifierGroups: links
+      .filter((link) => link.menuItemId === item.id)
+      .map((group) => ({
+        id: group.id,
+        name: group.name,
+        minSelect: group.minSelect,
+        maxSelect: group.maxSelect,
+        options: options
+          .filter((option) => option.groupId === group.id)
+          .map(({ id, name, priceDelta }) => ({ id, name, priceDelta })),
+      })),
+  }));
 }

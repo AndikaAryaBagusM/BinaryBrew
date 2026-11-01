@@ -21,6 +21,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -321,6 +322,8 @@ export const orders = pgTable(
     qrTokenId: uuid("qr_token_id"),
     createdBy: uuid("created_by"),
     clientSession: text("client_session"),
+    // Client-generated Idempotency-Key of the creating request (Tech §5).
+    idempotencyKey: text("idempotency_key"),
     subtotal: integer("subtotal").notNull(),
     serviceChargeBps: integer("service_charge_bps").notNull().default(0),
     serviceCharge: integer("service_charge").notNull().default(0),
@@ -346,6 +349,7 @@ export const orders = pgTable(
     fk("orders", t.voidedBy, users.id),
     index("orders_status_idx").on(t.status, t.createdAt),
     index("orders_business_date_idx").on(t.businessDate),
+    uniqueIndex("orders_idempotency_uq").on(t.clientSession, t.idempotencyKey),
   ],
 );
 

@@ -245,6 +245,7 @@ create table orders (
   qr_token_id        uuid references qr_tokens(id),
   created_by         uuid references users(id),   -- set for counter orders
   client_session     text,                        -- random per-browser id; not personal data
+  idempotency_key    text,                        -- client Idempotency-Key of the creating request
   subtotal           integer not null check (subtotal >= 0),
   service_charge_bps integer not null default 0 check (service_charge_bps >= 0),
   service_charge     integer not null default 0 check (service_charge >= 0),
@@ -275,6 +276,7 @@ create unique index orders_queue_uq        on orders (business_date, queue_numbe
 create index orders_status_idx             on orders (status, created_at);
 create index orders_business_date_idx      on orders (business_date);
 create index orders_client_session_idx     on orders (client_session) where status = 'awaiting_payment';
+create unique index orders_idempotency_uq  on orders (client_session, idempotency_key);
 create index orders_expiry_idx             on orders (expires_at) where status = 'awaiting_payment';
 
 create table order_items (
@@ -614,7 +616,7 @@ All multi-step changes happen inside one database transaction. Lock rows in a fi
 ### 5.1 Create order (self-order or counter)
 
 1. Validate the QR token (self-order) or the staff session (counter).
-2. Check the client's open unpaid orders (BR-11).
+2. Lock on the client (`pg_advisory_xact_lock` on `client_session`). If an order with the same `(client_session, idempotency_key)` exists, return it unchanged. Otherwise check the client's open unpaid orders (BR-11): `awaiting_payment` with `expires_at` still in the future.
 3. Load menu items, modifier options and settings; **ignore any prices from the client**.
 4. Validate modifier min/max per group and availability (`v_menu_item_availability` plus modifier ingredient deltas against `ingredients.stock_qty`). If anything is unavailable, abort with the list of items.
 5. Calculate `subtotal`, `service_charge = round(subtotal × service_charge_bps / 10000)`, `total = subtotal + service_charge`, `tax_amount = round(total × tax_rate_bps / (10000 + tax_rate_bps))` (inclusive tax). If `tax_inclusive` is false, tax is added on top: `tax_amount = round((subtotal + service_charge) × tax_rate_bps / 10000)`, `total = subtotal + service_charge + tax_amount`. Rounding is half-up (`src/lib/money.ts`). A line whose unit price plus option deltas is below zero is refused.
