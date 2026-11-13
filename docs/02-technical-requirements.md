@@ -109,7 +109,7 @@ volumes:
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN`, `SEED_STAFF_PIN`, `SEED_COUNTER_DEVICE_TOKEN` | local only | Used by `db:seed`; the device token is the seeded counter tablet's cookie value (only its hash is stored) |
 | `TZ` | `Asia/Jakarta` | Process timezone |
 
-Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run seed:orders`, `npm run import:orders`, `npm run reco:run`, `npm test`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
+Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run seed:orders`, `npm run import:orders`, `npm run reco:setup`, `npm run reco:run`, `npm test`, `npm run test:reco`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
 
 Testing on real phones: phone and PC on the same Wi-Fi; open `http://<PC-LAN-IP>:3000`. Camera QR scanning of `APP_BASE_URL` links works without HTTPS.
 
@@ -134,7 +134,7 @@ binary-brew/
 │  ├─ lib/                    # money.ts, time.ts, errors.ts, logger.ts, ids.ts, sse.ts, use-event-stream.ts
 │  ├─ i18n/id.json            # all UI text (Indonesian)
 │  └─ components/             # shared UI components
-├─ jobs/apriori/              # run.py, requirements.txt, tests
+├─ jobs/apriori/              # run.py, job.py, mining.py, db.py, requirements*.txt, tests/
 ├─ scripts/                   # worker.ts, generate-seed-orders.ts, import-orders-csv.ts
 ├─ tests/                     # unit/, integration/, e2e/
 ├─ docker-compose.yml
@@ -335,7 +335,7 @@ The header row names the columns in any order; other columns are ignored. At mos
 | Parameter | Default | Meaning |
 |---|---|---|
 | `min_support` | 0.02 | Itemset must appear in ≥ 2 % of baskets. |
-| `min_confidence` | 0.25 | Rule `A → B` must hold in ≥ 25 % of baskets that contain A. |
+| `min_confidence` | 0.15 | Rule `A → B` must hold in ≥ 15 % of baskets that contain A. (0.15 rather than 0.25 so the planted Latte → Roti Bakar pairing, about 0.20, is kept; docs/06 §7.) |
 | `min_lift` | 1.05 | Keep only rules where B is bought with A more than chance. |
 | `max_len` | 3 | Antecedent up to 2 items, 1 consequent. |
 | `min_orders` | 300 | Below this the run is skipped and the previous rules stay active. |
@@ -353,7 +353,7 @@ The thresholds are read from the `settings` table (keys `reco_min_support`, `rec
 5. If there are no candidates, optionally return one promoted available item; else none.
 6. Log each suggestion as a `recommendation_events` row (`shown`), and later `accepted` or `rejected`.
 
-**Running it:** `npm run reco:run` (calls `python jobs/apriori/run.py`). The worker also triggers it at 03:00 Asia/Jakarta if the machine is on. The job is deterministic for the same data, so results can be reproduced in the demo.
+**Running it:** once, `npm run reco:setup` creates the virtual environment `jobs/apriori/.venv` (Python 3.13) and installs the pinned packages (docs/versions.md). `npm run reco:run` then runs `jobs/apriori/run.py` with it against `DATABASE_URL` and prints the run, the basket count (and how many are seeded) and the top rules by lift. The worker also starts it between 03:00 and 04:00 Asia/Jakarta if the machine is on, once per night and only when no run (also a manual one) has started since 03:00; the outcome goes to the worker log. Only one run at a time (advisory lock); a second one reports `already_running`. The job is deterministic for the same data, so results can be reproduced in the demo. The database driver is pg8000 (pure Python).
 
 **Evaluation for the FSD:** report the number of baskets, thresholds used, the top rules table (support, confidence, lift), and later the acceptance rate from `recommendation_events`. State clearly when the data is seeded.
 
@@ -380,7 +380,7 @@ The thresholds are read from the `settings` table (keys `reco_min_support`, `rec
 |---|---|---|
 | Unit | Vitest | `money.ts` (rounding, tax inclusive formula), pricing, modifier validation, order state machine, availability, weighted-average cost, scoring |
 | Integration | Vitest + real PostgreSQL (separate test database, migrated fresh) | Create order → webhook → paid → queue number; duplicate webhook; late payment; expiry sweep; stock deduction; void return/waste; elevation single use; append-only triggers; constraint tests; concurrent queue numbers |
-| Job | pytest | Apriori on a tiny fixture with known rules; skip when under `min_orders`; atomic swap of active rules |
+| Job | pytest (`npm run test:reco`, part of `verify`) | Apriori on a tiny fixture with known rules; the planted rules recovered from the seed baskets; skip when under `min_orders`; atomic swap of active rules; a failed run keeps the old rules |
 | End to end | Playwright | Customer orders on a phone viewport with mock pay → Counter marks Ready → status page and board update; sold-out blocking; PIN login and lock; owner void flow |
 | Accessibility/perf | axe, Lighthouse | Customer pages |
 

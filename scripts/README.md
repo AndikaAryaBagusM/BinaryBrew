@@ -3,11 +3,12 @@
 Command-line jobs that run beside the app. Each one loads `.env` and uses the
 same modules as the app (`src/modules/*/service.ts`).
 
-| Command                                                      | Script                    |
-| ------------------------------------------------------------ | ------------------------- |
-| `npm run worker`                                             | `worker.ts`               |
-| `npm run seed:orders -- [--replace] [--end-date=YYYY-MM-DD]` | `generate-seed-orders.ts` |
-| `npm run import:orders -- <file.csv> [--dry-run]`            | `import-orders-csv.ts`    |
+| Command                                                      | Script                           |
+| ------------------------------------------------------------ | -------------------------------- |
+| `npm run worker`                                             | `worker.ts`                      |
+| `npm run seed:orders -- [--replace] [--end-date=YYYY-MM-DD]` | `generate-seed-orders.ts`        |
+| `npm run import:orders -- <file.csv> [--dry-run]`            | `import-orders-csv.ts`           |
+| `npm run reco:setup`, `reco:run`, `test:reco`                | `reco.ts` (runs `jobs/apriori/`) |
 
 ## Demo order history: `seed:orders`
 

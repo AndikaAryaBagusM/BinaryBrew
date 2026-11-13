@@ -291,5 +291,7 @@ describe("runWorkerTick", () => {
     const result = await runWorkerTick({ now: later(now, 30 * MINUTE) });
     expect(result.expired).toContain(unpaid.order.id);
     expect(result.completed).toContain(collected.order.id);
+    // Noon in Jakarta: outside the nightly recommendation window.
+    expect(result.recommendationRunStarted).toBe(false);
   });
 });

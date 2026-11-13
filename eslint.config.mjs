@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "coverage/**",
     "next-env.d.ts",
     ".claude/**",
+    // Python virtual environment of the Apriori job (npm run reco:setup)
+    "jobs/apriori/.venv/**",
   ]),
 ]);
 

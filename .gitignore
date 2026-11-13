@@ -41,3 +41,8 @@ __pycache__/
 
 # Impeccable engine binary (19 MB); the launcher fetches the checksum-verified release when missing
 .claude/skills/impeccable/scripts/bin/
+
+# Python virtual environment (npm run reco:setup)
+.venv/
+__pycache__/
+.pytest_cache/

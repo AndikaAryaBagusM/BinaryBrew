@@ -11,7 +11,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | Node.js    | 24.19.0 | `package.json` `engines` (>= 24); developer PC    |
 | npm        | 11.17.0 | Ships with Node.js                                |
 | PostgreSQL | 16.15   | `docker-compose.yml` image `postgres:16.15`       |
-| Python 3   | not yet | Installed and pinned with the Apriori job (P1-15) |
+| Python 3   | 3.13.5  | Developer PC (`py -3.13` on Windows); `npm run reco:setup` makes `jobs/apriori/.venv` |
 
 ## Dependencies
 
@@ -52,6 +52,21 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | `typescript`             | 5.9.3   |
 | `vitest`                 | 5.0.5   |
 
+## Python packages (Apriori job)
+
+Pinned in `jobs/apriori/requirements.txt` (with everything they pull in) and
+`requirements-dev.txt`. pandas stays on 2.3.x and the database driver is pg8000 (pure Python):
+the development PC's Windows Application Control policy blocks the compiled files of pandas
+3.1.1 and psycopg-binary.
+
+| Package   | Version |
+| --------- | ------- |
+| `mlxtend` | 0.25.0  |
+| `numpy`   | 2.5.4   |
+| `pandas`  | 2.3.3   |
+| `pg8000`  | 1.31.6  |
+| `pytest`  | 9.2.0   |
+
 ## Changing a version
 
 1. `npm install <package>@<version>` (`.npmrc` sets `save-exact`, so `package.json` gets the
@@ -61,6 +76,9 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 3. Run `npm run verify`.
 4. A new package with an install script stays blocked until it is reviewed and listed under
    `allowScripts` in `package.json`.
+
+For a Python package, change `jobs/apriori/requirements*.txt` and this file together, run
+`npm run reco:setup`, then `npm run verify`.
 
 For PostgreSQL, change the image tag in `docker-compose.yml` and this file together. Minor
 updates (16.x) keep the data volume; a major version needs a dump and restore.

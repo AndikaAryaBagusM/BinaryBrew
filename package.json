@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
+    "test:reco": "tsx scripts/reco.ts test",
     "test:e2e": "playwright test",
     "db:up": "docker compose up -d --wait db",
     "db:migrate": "drizzle-kit migrate",
@@ -23,8 +24,10 @@
     "db:seed": "tsx src/db/seed/index.ts",
     "seed:orders": "tsx scripts/generate-seed-orders.ts",
     "import:orders": "tsx scripts/import-orders-csv.ts",
+    "reco:setup": "tsx scripts/reco.ts setup",
+    "reco:run": "tsx scripts/reco.ts run",
     "db:setup": "npm run db:up && npm run db:migrate && npm run db:seed",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run test:reco",
     "prepare": "husky"
   },
   "lint-staged": {

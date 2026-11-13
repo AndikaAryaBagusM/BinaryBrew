@@ -578,7 +578,7 @@ insert into settings (key, value) values
   ('cash_enabled',                       'false'),
   ('manual_payment_requires_owner_pin',  'true'),
   ('reco_min_support',                   '0.02'),
-  ('reco_min_confidence',                '0.25'),
+  ('reco_min_confidence',                '0.15'),
   ('reco_min_lift',                      '1.05'),
   ('reco_min_orders',                    '300'),
   ('reco_promote_weight',                '0.5'),
