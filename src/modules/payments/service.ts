@@ -359,3 +359,30 @@ export async function confirmManualPayment(
 export function getOrderPayment(orderId: string) {
   return repo.selectLatestPayment(orderId);
 }
+
+// Demo order history (FR-RC-07): the paid QRIS payment of each seeded order.
+// No gateway is involved; provider "seed" marks them.
+const SEED_INSERT_CHUNK = 1000;
+
+export async function recordSeedPayments(
+  rows: { orderId: string; amount: number; createdAt: Date; paidAt: Date }[],
+  db: DbExecutor,
+) {
+  for (let start = 0; start < rows.length; start += SEED_INSERT_CHUNK) {
+    await repo.insertPayments(
+      rows.slice(start, start + SEED_INSERT_CHUNK).map((row) => ({
+        ...row,
+        method: "qris_dynamic" as const,
+        status: "paid" as const,
+        provider: "seed",
+        updatedAt: row.paidAt,
+      })),
+      db,
+    );
+  }
+}
+
+// For replacing seeded orders, which have no refunds.
+export function deleteSeedPayments(orderIds: string[], db: DbExecutor) {
+  return repo.deletePaymentsOfOrders(orderIds, db);
+}

@@ -32,8 +32,9 @@ function parseStored<K extends SettingKey>(
 
 export async function getSettings<K extends SettingKey>(
   keys: readonly K[],
+  db: DbExecutor = getDb(),
 ): Promise<Pick<Settings, K>> {
-  const rows = await repo.selectSettings([...keys]);
+  const rows = await repo.selectSettings([...keys], db);
   const stored = new Map(rows.map((row) => [row.key, row.value]));
   // Each value is checked by its key's schema; TypeScript cannot follow that
   // per-key link through the generic, hence one cast at the end.

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  addDays,
   businessDate,
   formatDate,
   formatLastActive,
   formatTime,
   parseCutoff,
+  parseShopLocalTime,
 } from "@/lib/time";
 import { businessDateCases } from "../fixtures/business-date-cases";
 
@@ -76,5 +78,38 @@ describe("formatLastActive (O-13)", () => {
     expect(
       formatLastActive(new Date("2026-10-29T05:00:00Z"), now, "kemarin"),
     ).toBe(formatDate(new Date("2026-10-29T05:00:00Z")));
+  });
+});
+
+describe("addDays", () => {
+  it("moves across months and years", () => {
+    expect(addDays("2026-10-31", 1)).toBe("2026-11-01");
+    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+    expect(addDays("2027-01-01", -60)).toBe("2026-11-02");
+  });
+
+  it("refuses a malformed date", () => {
+    expect(() => addDays("2026-10-1", 1)).toThrow(RangeError);
+  });
+});
+
+describe("parseShopLocalTime", () => {
+  it("reads shop local time (UTC+7)", () => {
+    expect(parseShopLocalTime("2026-10-01 09:15")).toEqual(
+      new Date("2026-10-01T02:15:00Z"),
+    );
+    expect(parseShopLocalTime("2026-10-01T00:30:45")).toEqual(
+      new Date("2026-09-30T17:30:45Z"),
+    );
+  });
+
+  it.each([
+    "2026-02-30 09:00",
+    "2026-10-01 24:00",
+    "2026-10-01",
+    "1/10/2026 09:00",
+    "2026-10-01 09:00Z",
+  ])("refuses %s", (text) => {
+    expect(parseShopLocalTime(text)).toBeNull();
   });
 });

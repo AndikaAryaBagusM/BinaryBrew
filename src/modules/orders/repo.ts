@@ -5,6 +5,7 @@ import {
   orderItems,
   orders,
   qrTokens,
+  queueCounters,
   users,
 } from "@/db/schema";
 
@@ -380,4 +381,73 @@ export async function setOrderStatus(
     .where(eq(orders.id, id))
     .returning({ queueNumber: orders.queueNumber });
   return row!.queueNumber;
+}
+
+// Order history (FR-RC-07): seeded and imported orders, marked by their
+// client_session.
+
+export function selectSessionOrders(clientSession: string, db: DbExecutor) {
+  return db
+    .select({
+      id: orders.id,
+      businessDate: orders.businessDate,
+      idempotencyKey: orders.idempotencyKey,
+    })
+    .from(orders)
+    .where(eq(orders.clientSession, clientSession));
+}
+
+// Order items cascade; recommendation events keep their row without it.
+export async function deleteOrders(ids: string[], db: DbExecutor) {
+  if (ids.length > 0) await db.delete(orders).where(inArray(orders.id, ids));
+}
+
+// The next `count` queue numbers of the day in one step, like
+// next_queue_number(); returns the first.
+export async function reserveQueueNumbers(
+  businessDate: string,
+  count: number,
+  db: DbExecutor,
+): Promise<number> {
+  const [row] = await db
+    .insert(queueCounters)
+    .values({ businessDate, lastNumber: count })
+    .onConflictDoUpdate({
+      target: queueCounters.businessDate,
+      set: { lastNumber: sql`${queueCounters.lastNumber} + ${count}` },
+    })
+    .returning({ lastNumber: queueCounters.lastNumber });
+  return row!.lastNumber - count + 1;
+}
+
+// After deleting orders: each day's counter goes back to the highest number
+// still in use, so a new seed starts again at 1.
+export async function rewindQueueCounters(dates: string[], db: DbExecutor) {
+  if (dates.length === 0) return;
+  await db
+    .update(queueCounters)
+    .set({
+      lastNumber: sql`coalesce((select max(${orders.queueNumber}) from ${orders} where ${orders.businessDate} = ${queueCounters.businessDate}), 0)`,
+    })
+    .where(inArray(queueCounters.businessDate, dates));
+}
+
+// Bulk inserts stay well under the 65,535 bind parameters of one statement.
+const INSERT_CHUNK = 1000;
+
+export async function insertOrderBatch(
+  orderValues: (typeof orders.$inferInsert)[],
+  itemValues: (typeof orderItems.$inferInsert)[],
+  db: DbExecutor,
+) {
+  for (let start = 0; start < orderValues.length; start += INSERT_CHUNK) {
+    await db
+      .insert(orders)
+      .values(orderValues.slice(start, start + INSERT_CHUNK));
+  }
+  for (let start = 0; start < itemValues.length; start += INSERT_CHUNK) {
+    await db
+      .insert(orderItems)
+      .values(itemValues.slice(start, start + INSERT_CHUNK));
+  }
 }

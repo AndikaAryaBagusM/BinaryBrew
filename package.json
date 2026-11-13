@@ -21,6 +21,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx src/db/seed/index.ts",
+    "seed:orders": "tsx scripts/generate-seed-orders.ts",
+    "import:orders": "tsx scripts/import-orders-csv.ts",
     "db:setup": "npm run db:up && npm run db:migrate && npm run db:seed",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "prepare": "husky"

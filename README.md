@@ -74,22 +74,24 @@ changing one.
 
 ## Scripts
 
-| Command                           | What it does                                                               |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| `npm run dev`                     | Start the dev server                                                       |
-| `npm run db:up`                   | Start PostgreSQL in Docker and wait until it is healthy                    |
-| `npm run db:migrate`              | Apply pending migrations to `DATABASE_URL`                                 |
-| `npm run db:generate`             | Generate a migration from changes in `src/db/schema.ts`                    |
-| `npm run db:seed`                 | Load settings, users, counter device, menu and QR tokens (idempotent)      |
-| `npm run db:setup`                | `db:up`, then `db:migrate`, then `db:seed`                                 |
-| `npm run build` / `npm start`     | Production build and server                                                |
-| `npm run typecheck`               | Generate route types, then `tsc --noEmit`                                  |
-| `npm run lint`                    | ESLint                                                                     |
-| `npm run format` / `format:check` | Prettier write / check                                                     |
-| `npm test`                        | Vitest unit and integration tests (integration needs `db:up`)              |
-| `npm run test:unit`               | Unit tests only, no database (used by the pre-commit hook)                 |
-| `npm run test:e2e`                | Playwright, phone viewport; stop `npm run dev` first (needs `db:up`)       |
-| `npm run verify`                  | Typecheck, lint, format check and tests; run before every commit and merge |
+| Command                           | What it does                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run dev`                     | Start the dev server                                                                              |
+| `npm run db:up`                   | Start PostgreSQL in Docker and wait until it is healthy                                           |
+| `npm run db:migrate`              | Apply pending migrations to `DATABASE_URL`                                                        |
+| `npm run db:generate`             | Generate a migration from changes in `src/db/schema.ts`                                           |
+| `npm run db:seed`                 | Load settings, users, counter device, menu and QR tokens (idempotent)                             |
+| `npm run db:setup`                | `db:up`, then `db:migrate`, then `db:seed`                                                        |
+| `npm run seed:orders`             | Demo order history: about 2,000 paid orders over 60 days ([scripts/README.md](scripts/README.md)) |
+| `npm run import:orders`           | Import order history from the old POS as CSV (docs/02 §10)                                        |
+| `npm run build` / `npm start`     | Production build and server                                                                       |
+| `npm run typecheck`               | Generate route types, then `tsc --noEmit`                                                         |
+| `npm run lint`                    | ESLint                                                                                            |
+| `npm run format` / `format:check` | Prettier write / check                                                                            |
+| `npm test`                        | Vitest unit and integration tests (integration needs `db:up`)                                     |
+| `npm run test:unit`               | Unit tests only, no database (used by the pre-commit hook)                                        |
+| `npm run test:e2e`                | Playwright, phone viewport; stop `npm run dev` first (needs `db:up`)                              |
+| `npm run verify`                  | Typecheck, lint, format check and tests; run before every commit and merge                        |
 
 The pre-commit hook runs ESLint and Prettier on staged files, then typecheck and unit tests.
 
