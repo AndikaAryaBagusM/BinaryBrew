@@ -306,3 +306,24 @@ export async function updateMenuItem(
     .set({ ...values, updatedAt: now })
     .where(eq(menuItems.id, id));
 }
+
+// Every item, active or not, for the seed generator and the order importer.
+export function selectItemCatalog(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: menuItems.id,
+      name: menuItems.name,
+      price: menuItems.price,
+      isActive: menuItems.isActive,
+    })
+    .from(menuItems)
+    .orderBy(asc(menuItems.name));
+}
+
+export function selectActiveQrCodes(db: DbExecutor = getDb()) {
+  return db
+    .select({ id: qrTokens.id, label: qrTokens.label })
+    .from(qrTokens)
+    .where(eq(qrTokens.isActive, true))
+    .orderBy(asc(qrTokens.label));
+}

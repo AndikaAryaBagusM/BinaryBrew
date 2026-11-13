@@ -109,7 +109,7 @@ volumes:
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN`, `SEED_STAFF_PIN`, `SEED_COUNTER_DEVICE_TOKEN` | local only | Used by `db:seed`; the device token is the seeded counter tablet's cookie value (only its hash is stored) |
 | `TZ` | `Asia/Jakarta` | Process timezone |
 
-Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run reco:run`, `npm test`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
+Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run seed:orders`, `npm run import:orders`, `npm run reco:run`, `npm test`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
 
 Testing on real phones: phone and PC on the same Wi-Fi; open `http://<PC-LAN-IP>:3000`. Camera QR scanning of `APP_BASE_URL` links works without HTTPS.
 
@@ -317,6 +317,18 @@ export interface PaymentProvider {
 This section is written so it can be reused in the course FSD.
 
 **Input:** one basket per paid, non-voided order: the set of distinct `menu_item_id`s (modifiers ignored). Seeded orders are included (flagged `is_seed`).
+
+**Order history:** `npm run seed:orders` creates the demo history (parameters in `scripts/README.md`, docs/06 §7). `npm run import:orders -- <file.csv> [--dry-run]` imports history from the old POS (PRD Q4) as CSV, UTF-8 (a byte order mark is fine), comma separated, RFC 4180 quoting:
+
+| Column | Required | Format |
+|---|---|---|
+| `order_ref` | yes | The old POS order number, up to 64 characters. Rows with the same `order_ref` are one order and must have the same `paid_at`. |
+| `paid_at` | yes | `YYYY-MM-DD HH:MM[:SS]` in Asia/Jakarta time, or ISO 8601 with an offset (`2026-10-01T09:15:00+07:00`). Not in the future. |
+| `item_name` | yes | A menu item name, matched ignoring case and extra spaces; inactive items count. |
+| `quantity` | yes | Whole number 1–20. |
+| `unit_price` | no | Whole rupiah (`18000`, `18.000` or `Rp 18.000`); empty means the current menu price. |
+
+The header row names the columns in any order; other columns are ignored. At most 30 lines per order. Any bad row and nothing is imported (every problem is listed with its line number). Imported orders are `completed` Counter orders taken by the owner, with `is_seed = true`, `client_session = 'import'` and `idempotency_key = order_ref`, so an order already imported is skipped. The old POS tax and payment method are unknown: the total is the sum of the lines, no tax or service charge, and no `payments` row. Queue numbers continue each business day's counter.
 
 **Algorithm:** Apriori frequent itemset mining followed by rule generation (`mlxtend.frequent_patterns.apriori` and `association_rules`), with:
 

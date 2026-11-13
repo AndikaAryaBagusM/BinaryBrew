@@ -521,3 +521,20 @@ export async function consumeElevation(
   if (!used) throw new AppError("ELEVATION_REQUIRED");
   return { elevationId: input.elevationId, ownerUserId: used.ownerUserId };
 }
+
+// Order history (FR-RC-07): who the seeded and imported orders were taken by.
+export async function listActiveCounterStaff(
+  db: DbExecutor = getDb(),
+): Promise<{ id: string; name: string }[]> {
+  const users = await repo.listActiveUsers(db);
+  return users
+    .filter((user) => user.role !== "owner")
+    .map(({ id, name }) => ({ id, name }));
+}
+
+export async function findActiveOwner(
+  db: DbExecutor = getDb(),
+): Promise<{ id: string; name: string } | undefined> {
+  const [owner] = await repo.findActiveOwners(db);
+  return owner && { id: owner.id, name: owner.name };
+}

@@ -75,3 +75,42 @@ export function formatLastActive(
   }
   return day;
 }
+
+// "2026-10-31" + 1 → "2026-11-01" (calendar days; business dates have no
+// time zone).
+export function addDays(date: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new RangeError(`date must be YYYY-MM-DD, got ${date}`);
+  const [, y, m, d] = match.map(Number) as [number, number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+const SHOP_UTC_OFFSET_MINUTES = 7 * 60; // Asia/Jakarta, no daylight saving
+
+// "2026-10-31 18:30" or "2026-10-31T18:30:15" read as shop local time; null
+// if it is not that shape or not a real date and time.
+export function parseShopLocalTime(text: string): Date | null {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+  if (!match) return null;
+  const [y, mo, d, h, mi, s] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0)) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const local = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  const real =
+    local.getUTCFullYear() === y &&
+    local.getUTCMonth() === mo - 1 &&
+    local.getUTCDate() === d &&
+    local.getUTCHours() === h &&
+    local.getUTCMinutes() === mi &&
+    local.getUTCSeconds() === s;
+  if (!real) return null;
+  return new Date(local.getTime() - SHOP_UTC_OFFSET_MINUTES * 60_000);
+}

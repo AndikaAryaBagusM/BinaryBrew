@@ -40,7 +40,8 @@ Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job. Exact versions
 - Checks: `npm run typecheck`, `npm run lint`, `npm run format:check`
 - Before every commit: `npm run verify` (typecheck, lint, format check, all tests)
 - Schema change: `npm run db:generate -- --name=<what_changed>`, review the SQL, `npm run db:migrate`
-- Later tasks add: `reco:run` (P1-15), `seed:orders` (P1-14)
+- Order history: `npm run seed:orders` (demo orders, `--replace` to redo; see scripts/README.md), `npm run import:orders -- <file.csv> [--dry-run]`
+- Later tasks add: `reco:run` (P1-15)
 
 ## Definition of done
 `npm run verify` passes; new behaviour has tests; docs updated if a rule, route or table changed;

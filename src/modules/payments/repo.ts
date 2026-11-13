@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
 import { paymentEvents, payments, refunds } from "@/db/schema";
 
@@ -139,4 +139,20 @@ export async function expirePendingPayments(
       provider: payments.provider,
       providerRef: payments.providerRef,
     });
+}
+
+export async function insertPayments(
+  values: (typeof payments.$inferInsert)[],
+  db: DbExecutor,
+) {
+  if (values.length > 0) await db.insert(payments).values(values);
+}
+
+export async function deletePaymentsOfOrders(
+  orderIds: string[],
+  db: DbExecutor,
+) {
+  if (orderIds.length > 0) {
+    await db.delete(payments).where(inArray(payments.orderId, orderIds));
+  }
 }

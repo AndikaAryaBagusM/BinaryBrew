@@ -2,24 +2,41 @@ import { randomUUID } from "node:crypto";
 import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
 import { newPublicToken } from "@/lib/ids";
-import { businessDate } from "@/lib/time";
+import { addDays, businessDate } from "@/lib/time";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
 import {
   COUNTER_ROLES,
+  findActiveOwner,
+  listActiveCounterStaff,
   requireRole,
   type SessionUser,
 } from "@/modules/auth/service";
-import { getOrderableItems, requireOrderingQr } from "@/modules/menu/service";
+import {
+  getItemCatalog,
+  getOrderableItems,
+  listActiveQrCodes,
+  requireOrderingQr,
+} from "@/modules/menu/service";
 import {
   cancelCharges,
+  deleteSeedPayments,
   ensureQrisCharge,
   expirePendingCharges,
   getOrderPayment,
   type PaymentSummary,
+  recordSeedPayments,
 } from "@/modules/payments/service";
 import { getSettings } from "@/modules/settings/service";
+import { type CsvProblem, readOrderCsv } from "./order-csv";
 import { type CartLine, priceOrder } from "./pricing";
 import * as repo from "./repo";
+import {
+  generateSeedOrders,
+  ITEM_POPULARITY,
+  PLANTED_RULES,
+  ruleStats,
+  SEED_PARAMETERS,
+} from "./seed-generator";
 
 // Order creation (FR-CO-06, FR-CO-08, BR-03, BR-11, Schema §5.1). The server
 // prices every order from the database; the client sends ids, options and
@@ -632,5 +649,322 @@ export async function advanceOrderStatus(
       tx,
     );
     return { status: input.status, queueNumber };
+  });
+}
+
+// Order history (FR-RC-07, docs/06 §7): demo orders from the seed generator
+// and orders imported from the old POS. Both are completed, paid orders
+// flagged is_seed; their client_session tells them apart and makes a rerun
+// safe. Command line only (scripts/), so there is no actor.
+
+export const SEED_SESSION = "seed";
+export const IMPORT_SESSION = "import";
+
+// A seeded customer pays this long after ordering.
+const SEED_PAYMENT_DELAY_MS = 2 * 60_000;
+
+type PastOrder = Omit<
+  Parameters<typeof repo.insertOrderBatch>[0][number],
+  "id" | "queueNumber" | "paidAt" | "businessDate" | "createdAt"
+> & {
+  paidAt: Date;
+  createdAt: Date;
+  businessDate: string;
+  lines: {
+    menuItemId: string;
+    name: string;
+    unitPrice: number;
+    quantity: number;
+  }[];
+};
+
+// Queue numbers continue the counter of each business day in payment order
+// (BR-04); days are taken oldest first, so counter rows lock in a fixed order.
+async function insertPastOrders(list: PastOrder[], db: DbExecutor) {
+  const days = new Map<string, PastOrder[]>();
+  const byPayment = [...list].sort(
+    (a, b) => a.paidAt.getTime() - b.paidAt.getTime(),
+  );
+  for (const order of byPayment) {
+    const day = days.get(order.businessDate);
+    if (day) day.push(order);
+    else days.set(order.businessDate, [order]);
+  }
+  const orderRows = [];
+  const itemRows = [];
+  for (const date of [...days.keys()].sort()) {
+    const day = days.get(date)!;
+    const first = await repo.reserveQueueNumbers(date, day.length, db);
+    for (const [index, { lines, ...order }] of day.entries()) {
+      const id = randomUUID();
+      orderRows.push({ ...order, id, queueNumber: first + index });
+      itemRows.push(
+        ...lines.map((line, position) => ({
+          orderId: id,
+          position,
+          menuItemId: line.menuItemId,
+          nameSnapshot: line.name,
+          unitPrice: line.unitPrice,
+          quantity: line.quantity,
+          lineTotal: line.unitPrice * line.quantity,
+        })),
+      );
+    }
+  }
+  await repo.insertOrderBatch(orderRows, itemRows, db);
+  return orderRows;
+}
+
+export type PlantedRuleResult = {
+  antecedent: string;
+  consequent: string;
+  targetConfidence: number;
+  support: number;
+  confidence: number;
+  lift: number;
+};
+
+export type SeedResult =
+  | { status: "exists"; existing: number }
+  | {
+      status: "created";
+      created: number;
+      replaced: number;
+      firstDate: string;
+      lastDate: string;
+      rules: PlantedRuleResult[];
+    };
+
+// `npm run seed:orders`: about 2,000 orders over the 60 business days ending
+// on endDate, priced with the current menu prices, tax and service charge.
+// Refuses to add a second set; `replace` deletes the earlier one first.
+// endDate must be before the current business day, so no live order shares a
+// seeded day.
+export async function seedDemoOrders(
+  { endDate, replace = false }: { endDate: string; replace?: boolean },
+  { now = new Date(), db = getDb() }: { now?: Date; db?: DbExecutor } = {},
+): Promise<SeedResult> {
+  return db.transaction(async (tx) => {
+    await repo.lockClientSession(SEED_SESSION, tx);
+    const settings = await getSettings(
+      [
+        "tax_rate_bps",
+        "tax_inclusive",
+        "service_charge_bps",
+        "order_expiry_minutes",
+        "business_day_cutoff",
+      ],
+      tx,
+    );
+    if (endDate >= businessDate(now, settings.business_day_cutoff)) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { reason: "end_date_not_past", endDate },
+      });
+    }
+
+    const existing = await repo.selectSessionOrders(SEED_SESSION, tx);
+    if (existing.length > 0 && !replace) {
+      return { status: "exists", existing: existing.length };
+    }
+    const ids = existing.map((order) => order.id);
+    await deleteSeedPayments(ids, tx);
+    await repo.deleteOrders(ids, tx);
+    await repo.rewindQueueCounters(
+      [...new Set(existing.map((order) => order.businessDate))],
+      tx,
+    );
+
+    const catalog = await getItemCatalog(tx);
+    const found = ITEM_POPULARITY.map(([name]) => ({
+      name,
+      item: catalog.find((entry) => entry.name === name),
+    }));
+    const missing = found.filter((e) => !e.item).map((e) => e.name);
+    const tables = (await listActiveQrCodes(tx)).filter((qr) =>
+      qr.label.startsWith("Meja "),
+    );
+    const staff = await listActiveCounterStaff(tx);
+    if (missing.length > 0 || tables.length === 0 || staff.length === 0) {
+      // The demo menu, tables and staff come from `npm run db:seed`.
+      throw new AppError("VALIDATION_FAILED", {
+        details: {
+          reason: "demo_data_missing",
+          menuItems: missing,
+          tables: tables.length,
+          staff: staff.length,
+        },
+      });
+    }
+    const pricingItems = found.map(({ item }) => ({
+      id: item!.id,
+      name: item!.name,
+      price: item!.price,
+      modifierGroups: [],
+    }));
+    const idByName = new Map(pricingItems.map((item) => [item.name, item.id]));
+    const rates = {
+      taxRateBps: settings.tax_rate_bps,
+      taxInclusive: settings.tax_inclusive,
+      serviceChargeBps: settings.service_charge_bps,
+    };
+
+    const generated = generateSeedOrders({ endDate });
+    const inserted = await insertPastOrders(
+      generated.map((order, n) => {
+        const priced = priceOrder(
+          order.lines.map((line) => ({
+            menuItemId: idByName.get(line.name)!,
+            quantity: line.quantity,
+            modifierOptionIds: [],
+          })),
+          pricingItems,
+          rates,
+        );
+        const createdAt = new Date(
+          order.paidAt.getTime() - SEED_PAYMENT_DELAY_MS,
+        );
+        const selfOrder = order.channel === "self_order";
+        return {
+          publicToken: newPublicToken(),
+          businessDate: businessDate(
+            order.paidAt,
+            settings.business_day_cutoff,
+          ),
+          channel: order.channel,
+          status: "completed" as const,
+          qrTokenId: selfOrder ? tables[order.table % tables.length]!.id : null,
+          createdBy: selfOrder ? null : staff[order.staff % staff.length]!.id,
+          clientSession: SEED_SESSION,
+          idempotencyKey: `seed:${n + 1}`,
+          subtotal: priced.subtotal,
+          serviceChargeBps: priced.serviceChargeBps,
+          serviceCharge: priced.serviceCharge,
+          taxRateBps: priced.taxRateBps,
+          taxAmount: priced.taxAmount,
+          taxInclusive: priced.taxInclusive,
+          total: priced.total,
+          expiresAt: new Date(
+            createdAt.getTime() + settings.order_expiry_minutes * 60_000,
+          ),
+          paidAt: order.paidAt,
+          preparingAt: order.preparingAt,
+          readyAt: order.readyAt,
+          completedAt: order.completedAt,
+          isSeed: true,
+          createdAt,
+          updatedAt: order.completedAt,
+          lines: priced.lines,
+        };
+      }),
+      tx,
+    );
+    await recordSeedPayments(
+      inserted.map((order) => ({
+        orderId: order.id,
+        amount: order.total,
+        createdAt: order.createdAt,
+        paidAt: order.paidAt,
+      })),
+      tx,
+    );
+
+    return {
+      status: "created",
+      created: inserted.length,
+      replaced: existing.length,
+      firstDate: addDays(endDate, 1 - SEED_PARAMETERS.days),
+      lastDate: endDate,
+      rules: PLANTED_RULES.map((rule) => ({
+        antecedent: rule.antecedent,
+        consequent: rule.consequent,
+        targetConfidence: rule.targetConfidence,
+        ...ruleStats(generated, rule.antecedent, rule.consequent),
+      })),
+    };
+  });
+}
+
+export type ImportResult =
+  | { status: "invalid"; problems: CsvProblem[] }
+  | {
+      status: "checked" | "imported";
+      orders: number;
+      lines: number;
+      skipped: number; // order_refs imported before
+    };
+
+// `npm run import:orders`: order history from the old POS (CSV format in
+// docs/02 §10). All or nothing: any bad row and nothing is imported. An
+// order_ref imported before is skipped, so a file can be imported again after
+// rows are added. The old POS tax and payment method are unknown: the total
+// is the sum of the lines, and there is no payment row.
+export async function importOrderHistory(
+  csv: string,
+  {
+    dryRun = false,
+    now = new Date(),
+    db = getDb(),
+  }: { dryRun?: boolean; now?: Date; db?: DbExecutor } = {},
+): Promise<ImportResult> {
+  return db.transaction(async (tx) => {
+    await repo.lockClientSession(IMPORT_SESSION, tx);
+    const { orders, problems } = readOrderCsv(
+      csv,
+      await getItemCatalog(tx),
+      now,
+    );
+    if (problems.length > 0) return { status: "invalid", problems };
+
+    const known = new Set(
+      (await repo.selectSessionOrders(IMPORT_SESSION, tx)).map(
+        (order) => order.idempotencyKey,
+      ),
+    );
+    const fresh = orders.filter((order) => !known.has(order.ref));
+    const summary = {
+      orders: fresh.length,
+      lines: fresh.reduce((sum, order) => sum + order.lines.length, 0),
+      skipped: orders.length - fresh.length,
+    };
+    // Imported orders count as taken at the Counter by the owner.
+    const owner = await findActiveOwner(tx);
+    if (!owner) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { reason: "owner_missing" },
+      });
+    }
+    if (dryRun) return { status: "checked", ...summary };
+
+    const { business_day_cutoff } = await getSettings(
+      ["business_day_cutoff"],
+      tx,
+    );
+    await insertPastOrders(
+      fresh.map((order) => {
+        const subtotal = order.lines.reduce(
+          (sum, line) => sum + line.unitPrice * line.quantity,
+          0,
+        );
+        return {
+          publicToken: newPublicToken(),
+          businessDate: businessDate(order.paidAt, business_day_cutoff),
+          channel: "counter" as const,
+          status: "completed" as const,
+          createdBy: owner.id,
+          clientSession: IMPORT_SESSION,
+          idempotencyKey: order.ref,
+          subtotal,
+          total: subtotal,
+          paidAt: order.paidAt,
+          completedAt: order.paidAt,
+          isSeed: true,
+          createdAt: order.paidAt,
+          updatedAt: order.paidAt,
+          lines: order.lines,
+        };
+      }),
+      tx,
+    );
+    return { status: "imported", ...summary };
   });
 }

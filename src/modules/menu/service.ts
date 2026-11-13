@@ -504,3 +504,13 @@ export async function getOrderableItems(
       })),
   }));
 }
+
+// Order history (FR-RC-07): every menu item with its current price, active or
+// not, and the active QR codes.
+export function getItemCatalog(db: DbExecutor = getDb()) {
+  return repo.selectItemCatalog(db);
+}
+
+export function listActiveQrCodes(db: DbExecutor = getDb()) {
+  return repo.selectActiveQrCodes(db);
+}

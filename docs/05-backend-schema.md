@@ -760,7 +760,7 @@ where ready_at is not null
 2. Categories, about 12 menu items, modifier groups (Ukuran, Gula, Es, Tambahan) and options.
 3. QR tokens: "Pintu masuk" and "Meja 1" to "Meja 6".
 4. (Phase 2) Ingredients, recipes, an opening stock movement for each ingredient.
-5. About 2,000 synthetic paid orders over 60 days (`is_seed = true`) generated with planted pairings (for example kopi susu + croissant) and realistic evening peaks, so the Apriori job has something to find. The generator is deterministic (fixed random seed) and documented, so the demo can state exactly how the data was made.
+5. About 2,000 synthetic paid orders over 60 days (`is_seed = true`) generated with planted pairings (for example kopi susu + croissant) and realistic evening peaks, so the Apriori job has something to find. The generator is deterministic (fixed random seed) and documented, so the demo can state exactly how the data was made. It is a separate command, `npm run seed:orders` (`client_session = 'seed'`); orders imported from the old POS are also `is_seed` (`client_session = 'import'`, docs/02 §10).
 
 ## 8. Retention and privacy
 
