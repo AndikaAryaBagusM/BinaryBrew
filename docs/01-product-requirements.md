@@ -262,7 +262,7 @@ These fill gaps; each is a setting or easy to change. Confirm during review.
 | A6 | Business day cutoff is 04:00 Asia/Jakarta. |
 | A7 | Ready orders auto-complete after 30 minutes. |
 | A8 | Late payment on an expired order revives the order if possible, else auto-creates a refund request. |
-| A9 | Apriori: min support 0.02, min confidence 0.25, min lift 1.05, antecedent up to 2 items, needs at least 300 paid orders or the run is skipped. |
+| A9 | Apriori: min support 0.02, min confidence 0.15, min lift 1.05, antecedent up to 2 items, needs at least 300 paid orders or the run is skipped. |
 | A10 | Recommendation score = confidence × (1 + 0.5 × promoted) × (1 + 0.25 × margin%), weights editable in settings. |
 | A11 | Order records kept 24 months. |
 | A12 | Tax and service charge default to 0 until the accountant confirms; service charge is added on top of the subtotal, tax is included in the total. |

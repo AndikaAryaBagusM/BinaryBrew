@@ -53,7 +53,7 @@ Next.js App Router, TypeScript strict, Tailwind, Zod, Drizzle + SQL migrations, 
 Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job.
 
 ## Commands
-npm run dev | worker | db:up | db:migrate | db:seed | reco:run | test | test:e2e | lint | typecheck | verify
+npm run dev | worker | db:up | db:migrate | db:seed | seed:orders | import:orders | reco:setup | reco:run | test | test:reco | test:e2e | lint | typecheck | verify
 
 ## Hard rules
 - Money is integer rupiah. All tax/rounding arithmetic lives in src/lib/money.ts.
@@ -236,6 +236,6 @@ Keep this table up to date at the end of each session.
 | Phase | Tasks done | Notes |
 |---|---|---|
 | 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
-| 1 | 14 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ |
+| 1 | 15 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ P1-15 ✔ |
 | 2 | 0 / 8 | |
 | 3 | 0 / 8 | |

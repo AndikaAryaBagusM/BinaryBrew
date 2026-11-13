@@ -9,3 +9,5 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .impeccable/
+# Generated from the seed generator (tests/unit/reco-fixture.test.ts)
+jobs/apriori/tests/fixtures/

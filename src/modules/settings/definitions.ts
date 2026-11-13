@@ -36,7 +36,7 @@ export const settingDefinitions = {
   cash_enabled: { schema: z.boolean(), default: false },
   manual_payment_requires_owner_pin: { schema: z.boolean(), default: true },
   reco_min_support: { schema: ratio, default: 0.02 },
-  reco_min_confidence: { schema: ratio, default: 0.25 },
+  reco_min_confidence: { schema: ratio, default: 0.15 },
   reco_min_lift: { schema: z.number().min(0).max(100), default: 1.05 },
   reco_min_orders: { schema: z.int().min(0), default: 300 },
   reco_promote_weight: { schema: weight, default: 0.5 },

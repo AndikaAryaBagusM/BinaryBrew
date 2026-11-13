@@ -38,10 +38,10 @@ Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job. Exact versions
 - Dev server: `npm run dev`, plus `npm run worker` in a second terminal (expires unpaid orders and completes uncollected Ready orders every 30 s)
 - Tests: `npm test` (unit + integration; integration needs the database), `npm run test:unit` (no database), `npm run test:e2e` (Playwright, own dev server on port 3100 and database `*_e2e_test`; stop `npm run dev` first; not part of `verify`)
 - Checks: `npm run typecheck`, `npm run lint`, `npm run format:check`
-- Before every commit: `npm run verify` (typecheck, lint, format check, all tests)
+- Before every commit: `npm run verify` (typecheck, lint, format check, all tests including pytest)
 - Schema change: `npm run db:generate -- --name=<what_changed>`, review the SQL, `npm run db:migrate`
 - Order history: `npm run seed:orders` (demo orders, `--replace` to redo; see scripts/README.md), `npm run import:orders -- <file.csv> [--dry-run]`
-- Later tasks add: `reco:run` (P1-15)
+- Recommendations: `npm run reco:setup` once (Python 3.13 venv in jobs/apriori/.venv), then `npm run reco:run`; `npm run test:reco` runs pytest
 
 ## Definition of done
 `npm run verify` passes; new behaviour has tests; docs updated if a rule, route or table changed;

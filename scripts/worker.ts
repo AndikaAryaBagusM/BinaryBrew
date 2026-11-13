@@ -15,12 +15,16 @@ const log = logger.child({ process: "worker" });
 
 const loop = startRepeating(
   async () => {
-    const { expired, completed } = await runWorkerTick();
+    const { expired, completed, recommendationRunStarted } =
+      await runWorkerTick();
     if (expired.length > 0 || completed.length > 0) {
       log.info(
         { expired: expired.length, completed: completed.length },
         "orders swept",
       );
+    }
+    if (recommendationRunStarted) {
+      log.info("nightly recommendation run started");
     }
   },
   WORKER_INTERVAL_MS,

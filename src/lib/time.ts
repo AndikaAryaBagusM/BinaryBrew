@@ -85,7 +85,7 @@ export function addDays(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-const SHOP_UTC_OFFSET_MINUTES = 7 * 60; // Asia/Jakarta, no daylight saving
+export const SHOP_UTC_OFFSET_MINUTES = 7 * 60; // Asia/Jakarta, no daylight saving
 
 // "2026-10-31 18:30" or "2026-10-31T18:30:15" read as shop local time; null
 // if it is not that shape or not a real date and time.
