@@ -91,6 +91,8 @@ changing one.
 | `npm run db:generate`             | Generate a migration from changes in `src/db/schema.ts`                                           |
 | `npm run db:seed`                 | Load settings, users, counter device, menu and QR tokens (idempotent)                             |
 | `npm run db:setup`                | `db:up`, then `db:migrate`, then `db:seed`                                                        |
+| `npm run db:reset`                | Delete everything in the local dev database and migrate it again (asks first; `-- --yes` skips)   |
+| `npm run worker`                  | Expire unpaid orders, complete uncollected ones, start the nightly Apriori run (every 30 s)       |
 | `npm run seed:orders`             | Demo order history: about 2,000 paid orders over 60 days ([scripts/README.md](scripts/README.md)) |
 | `npm run reco:setup`              | Create the Python environment for the Apriori job (`jobs/apriori/.venv`)                          |
 | `npm run reco:run`                | Run the Apriori job: mine paid orders and activate the new rules                                  |
@@ -104,8 +106,56 @@ changing one.
 | `npm run test:unit`               | Unit tests only, no database (used by the pre-commit hook)                                        |
 | `npm run test:e2e`                | Playwright, phone viewport; stop `npm run dev` first (needs `db:up`)                              |
 | `npm run verify`                  | Typecheck, lint, format check and tests; run before every commit and merge                        |
+| `npm run perf:menu`               | Lighthouse on the menu page of a running production build (mobile, throttled; target ≥ 80)        |
+| `npm run load:test`               | 30 customers over 10 minutes against a running app (`--customers`, `--minutes`, `--url`)          |
+| `npm run demo:replay-webhook`     | Send one mock "paid" webhook for an order twice (`-- <publicToken>`); demo step 8                 |
 
 The pre-commit hook runs ESLint and Prettier on staged files, then typecheck and unit tests.
+
+## Running the demo
+
+The Phase 1 demo (docs/06 §6, about 8 minutes) needs the PC, a phone on the same Wi-Fi (see
+"Testing on a phone" below), a tablet or second browser window for the Counter, and a screen for
+the queue board. `.env` must have `PAYMENT_PROVIDER=mock` and `SEED_COUNTER_DEVICE_TOKEN` set.
+
+1. Reset and load the demo data. This deletes everything in the dev database.
+
+   ```bash
+   npm run db:reset -- --yes
+   npm run db:seed
+   npm run seed:orders
+   npm run reco:run
+   ```
+
+   `reco:run` prints the basket count (all **seeded**) and the rules by lift, for example
+   Kopi Susu Gula Aren → Croissant: explain support, confidence and lift with two of them.
+
+2. Start the app and the worker in two terminals: `npm run dev` and `npm run worker`.
+3. Open the screens:
+   - Counter: `http://<pc>:3000/api/dev/counter-device` (registers the browser as the counter
+     tablet), then sign in as a staff user with `SEED_STAFF_PIN`.
+   - Board: `http://<pc>:3000/board`.
+   - Phone: scan the "Meja 1" QR link that `db:seed` printed.
+4. Follow the steps in docs/06 §6:
+   - Phone: Kopi Susu Gula Aren → "Bayar dengan QRIS" → the sheet suggests Croissant from the
+     rule → "Tambah" → "Lanjut bayar" → "Simulasi bayar". The phone shows the number; the
+     Counter chimes.
+   - Counter: "Mulai", then "Siap" (the phone shows "Pesanan siap diambil!" and the board moves
+     the number to Siap), then "Diambil".
+   - Counter walk-in: add items → "Bayar" → "Pelanggan bayar lewat QR kios" → a reference →
+     "Konfirmasi dibayar" → the owner PIN (`SEED_OWNER_PIN`). The audit row is in `audit_logs`
+     (`payment.manual_confirm`).
+   - Expiry: in the owner settings set the payment time limit to 1 minute, place an order and
+     wait; the worker expires it within 30 s after the minute and no queue number is used. Set it
+     back afterwards.
+   - Webhook replay: place an order without paying, copy the token from its `/s/<token>` link and
+     run `npm run demo:replay-webhook -- <token>`: the first send is `paid`, the second
+     `duplicate`.
+
+Checks behind the Phase 1 exit criteria: `npm run verify`, `npm run test:e2e` (includes axe on
+every customer screen), `npm run perf:menu` against `npm run build && npm run start`, and
+`npm run load:test` against a running app. The load test creates real paid orders: run it
+before the reset, or point the app and the script at another database with `DATABASE_URL`.
 
 ## Testing on a phone
 

@@ -129,6 +129,38 @@ test("no sheet when the suggestion is already in the cart", async ({
   expect(await eventsOf(page)).toEqual([]);
 });
 
+// FR-RC-03, FR-RC-05: no rule starts from Croissant, so the sheet falls back
+// to the promoted item, which the menu also tags "Rekomendasi".
+test("a promoted item is tagged on the menu and suggested when no rule matches", async ({
+  page,
+}) => {
+  await sql`update menu_items set is_promoted = true where name = 'Roti Bakar'`;
+  try {
+    await page.goto(`/o/${token}`);
+    const card = (name: string) =>
+      page.getByRole("article").filter({
+        has: page.getByRole("heading", { name, exact: true }),
+      });
+    await expect(card("Roti Bakar").getByText("Rekomendasi")).toBeVisible();
+    await expect(card("Croissant").getByText("Rekomendasi")).toHaveCount(0);
+
+    await cartWith(page, "Croissant");
+    await page.getByRole("button", { name: "Bayar dengan QRIS" }).click();
+    const sheet = page.getByRole("dialog", { name: "Sering dipesan bersama" });
+    await expect(sheet.getByRole("listitem")).toHaveCount(1);
+    await expect(sheet.getByRole("listitem")).toContainText("Roti Bakar");
+    await expect(sheet.getByText(/Pelanggan lain/)).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Lanjut bayar" }).click();
+    await toPayment(page);
+    expect(await eventsOf(page)).toEqual([
+      ["shown", "Roti Bakar"],
+      ["rejected", "Roti Bakar"],
+    ]);
+  } finally {
+    await sql`update menu_items set is_promoted = false where name = 'Roti Bakar'`;
+  }
+});
+
 test("no sheet when the suggestion is sold out", async ({ page }) => {
   await cartWith(page, "Kopi Susu Gula Aren");
   await sql`update menu_items set manual_sold_out = true where name = 'Croissant'`;

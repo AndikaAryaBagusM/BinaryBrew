@@ -206,6 +206,7 @@ describe("priceOrder: input from the public menu", () => {
       price: 25_000,
       imageUrl: null,
       isAvailable: true,
+      isPromoted: false,
       modifierGroups: [
         {
           ...size,

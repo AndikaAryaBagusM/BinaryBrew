@@ -66,6 +66,7 @@ describe("getPublicMenu (FR-CO-01, FR-CO-02)", () => {
         "id",
         "imageUrl",
         "isAvailable",
+        "isPromoted",
         "modifierGroups",
         "name",
         "price",
@@ -76,6 +77,7 @@ describe("getPublicMenu (FR-CO-01, FR-CO-02)", () => {
       description: "Espresso dengan susu",
       price: 25000,
       imageUrl: null,
+      isPromoted: false,
     });
   });
 

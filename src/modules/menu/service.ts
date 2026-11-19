@@ -35,6 +35,8 @@ export type PublicMenuItem = {
   price: number;
   imageUrl: string | null;
   isAvailable: boolean;
+  // The owner's promote flag: the card shows "Rekomendasi" (Design §5).
+  isPromoted: boolean;
   modifierGroups: PublicModifierGroup[];
 };
 
@@ -111,6 +113,7 @@ function loadCategories(): Promise<PublicMenu["categories"]> {
           imageUrl: item.imageUrl,
           // P2-03 switches this to the availability view (stock).
           isAvailable: !item.manualSoldOut,
+          isPromoted: item.isPromoted,
           modifierGroups: (groupsByItem.get(item.id) ?? []).map((group) => ({
             id: group.id,
             name: group.name,

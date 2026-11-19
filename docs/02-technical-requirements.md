@@ -109,7 +109,7 @@ volumes:
 | `SEED_OWNER_EMAIL`, `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN`, `SEED_STAFF_PIN`, `SEED_COUNTER_DEVICE_TOKEN` | local only | Used by `db:seed`; the device token is the seeded counter tablet's cookie value (only its hash is stored) |
 | `TZ` | `Asia/Jakarta` | Process timezone |
 
-Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run seed:orders`, `npm run import:orders`, `npm run reco:setup`, `npm run reco:run`, `npm test`, `npm run test:reco`, `npm run test:e2e`, `npm run lint`, `npm run typecheck`.
+Daily commands (all defined in `package.json`): `npm run dev`, `npm run worker`, `npm run db:up`, `npm run db:migrate`, `npm run db:seed`, `npm run db:reset`, `npm run seed:orders`, `npm run import:orders`, `npm run reco:setup`, `npm run reco:run`, `npm test`, `npm run test:reco`, `npm run test:e2e`, `npm run perf:menu`, `npm run load:test`, `npm run demo:replay-webhook`, `npm run lint`, `npm run typecheck`.
 
 Testing on real phones: phone and PC on the same Wi-Fi; open `http://<PC-LAN-IP>:3000`. Camera QR scanning of `APP_BASE_URL` links works without HTTPS.
 
@@ -170,7 +170,7 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /api/public/menu?qr=<token>` | Public | Categories, items, availability, modifier groups. Rejects invalid/rotated token. |
+| `GET /api/public/menu?qr=<token>` | Public | Categories, items (with availability and the promote flag for the "Rekomendasi" tag), modifier groups. Rejects invalid/rotated token. |
 | `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, `status`, `total`, `expiresAt` and `payment` (`id`, `qrString`, `amount`, `expiresAt`); the charge is created after the order commits, and a retry with the same key creates it if that failed. |
 | `GET /api/public/orders/{publicToken}` | Token | Status, items with options, totals, queue number, payment (QR string only while it can be paid), menu path. `no-store`; 404 for an unknown token. |
 | `POST /api/public/orders/{publicToken}/cancel` | Token, same origin | C-05 "Kembali ke keranjang": an unpaid self-order expires now with its pending charge (charge cancelled at the provider, best effort). Any other order is left unchanged (BR-06). Returns `{status}`. |
@@ -364,14 +364,14 @@ The score is stored rounded to 4 decimals; a `promoted` fallback has no rule and
 
 | Area | Target | How it is met / checked |
 |---|---|---|
-| Menu page load | Interactive in ≤ 3 s on a mid-range Android phone over 4G | Server-render the menu, compress images (WebP, ≤ 100 KB each), no heavy client libraries; check with Lighthouse in Phase 1 |
-| API latency | p95 ≤ 300 ms locally for order creation and status changes | Few queries per request; indexes in the schema; measured in an integration test with 30 parallel orders |
-| Concurrency | 30 customers ordering within 10 minutes without errors | Load script (autocannon or k6) against the local app |
+| Menu page load | Interactive in ≤ 3 s on a mid-range Android phone over 4G | Server-render the menu, compress images (WebP, ≤ 100 KB each), no heavy client libraries; `npm run perf:menu` runs Lighthouse (mobile, throttled) on a production build and fails below 80 |
+| API latency | p95 ≤ 300 ms locally for order creation and status changes | Few queries per request; indexes in the schema; measured by `npm run load:test` (p95 per request type; fails above 300 ms) |
+| Concurrency | 30 customers ordering within 10 minutes without errors | `npm run load:test`: a plain Node script (no load-testing package) that runs the whole self-order flow per customer, each with its own `clientSession` and address |
 | Queue number | No duplicates under parallel payments | `next_queue_number()` test with 50 parallel "mark paid" calls |
 | Correctness | Money and stock never drift | Unit tests for `money.ts`, pricing, tax; invariant I7 reconciliation test |
 | Reliability | Webhook replays and out-of-order events are harmless | Integration tests for duplicates, late payment, expired order |
 | Availability | Accepted risk: stops without internet or when the host is off (D6) | Documented fallback in Phase 4 runbook |
-| Accessibility | WCAG 2.1 AA colour contrast; targets ≥ 44 px (counter ≥ 56 px); visible focus; screen-reader labels | Design brief; axe checks in Playwright for customer pages |
+| Accessibility | WCAG 2.1 AA colour contrast; targets ≥ 44 px (counter ≥ 56 px); visible focus; screen-reader labels | Design brief; `tests/e2e/accessibility.spec.ts` runs axe (WCAG 2.1 A/AA, no serious or critical issues) on every customer screen and places an order by keyboard alone |
 | Browsers | iOS Safari 15+, Chrome/Android 100+, current desktop browsers; Counter on a current Chrome tablet | Manual check list in Phase 1 |
 | i18n | Indonesian UI; strings in one file; amounts as `Rp 22.000` | `i18n/id.json`, formatting helpers |
 | Observability | Structured logs with request id; a `/api/health` route checking the database | pino |

@@ -12,6 +12,7 @@ const item = {
   price: 22000,
   imageUrl: null,
   isAvailable: true,
+  isPromoted: false,
   modifierGroups: [],
 };
 
@@ -37,6 +38,15 @@ describe("MenuItemCard (C-01)", () => {
     );
     expect(markup).toContain("Habis");
     expect(markup).toMatch(/<button[^>]* disabled=""/);
+  });
+
+  it("tags promoted items with Rekomendasi, unless sold out", () => {
+    expect(html(<MenuItemCard item={item} />)).not.toContain("Rekomendasi");
+    const promoted = { ...item, isPromoted: true };
+    expect(html(<MenuItemCard item={promoted} />)).toContain("Rekomendasi");
+    expect(
+      html(<MenuItemCard item={{ ...promoted, isAvailable: false }} />),
+    ).not.toContain("Rekomendasi");
   });
 });
 

@@ -37,6 +37,7 @@ export function selectActiveItems(db: DbExecutor = getDb()) {
       description: menuItems.description,
       price: menuItems.price,
       imageUrl: menuItems.imageUrl,
+      isPromoted: menuItems.isPromoted,
       manualSoldOut: menuItems.manualSoldOut,
     })
     .from(menuItems)

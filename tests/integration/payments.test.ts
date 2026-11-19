@@ -13,7 +13,11 @@ import {
   resetOrderRateLimits,
 } from "@/modules/orders/service";
 import { signMockEvent } from "@/modules/payments/providers/mock";
-import { handlePaymentWebhook, mockPay } from "@/modules/payments/service";
+import {
+  handlePaymentWebhook,
+  mockPay,
+  signedMockPaidEvent,
+} from "@/modules/payments/service";
 import { createCatalog } from "./menu-fixtures";
 
 // P1-07 (FR-PM-01..03, FR-PM-07, BR-04, Schema §5.2): a verified, idempotent
@@ -187,6 +191,27 @@ describe("handlePaymentWebhook: paid (Schema §5.2)", () => {
       queueNumber: 1,
       businessDate: businessDate(now),
     });
+  });
+
+  it("signedMockPaidEvent gives one event to replay (demo step 8)", async () => {
+    const now = freshDay();
+    const { order, payment } = await placeOrder(now);
+    const event = await signedMockPaidEvent(payment!.id);
+    const outcomes = [];
+    for (const minutes of [1, 2]) {
+      const result = await handlePaymentWebhook(
+        "mock",
+        event.body,
+        event.headers,
+        { now: later(now, minutes) },
+      );
+      outcomes.push(result.outcome);
+    }
+    expect(outcomes).toEqual(["paid", "duplicate"]);
+    expect(await orderRow(order.id)).toMatchObject({ queueNumber: 1 });
+    await expect(
+      signedMockPaidEvent("00000000-0000-4000-8000-000000000000"),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("processes a duplicate event once (FR-PM-03)", async () => {
