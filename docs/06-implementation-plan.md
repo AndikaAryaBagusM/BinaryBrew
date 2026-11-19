@@ -53,7 +53,7 @@ Next.js App Router, TypeScript strict, Tailwind, Zod, Drizzle + SQL migrations, 
 Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job.
 
 ## Commands
-npm run dev | worker | db:up | db:migrate | db:seed | seed:orders | import:orders | reco:setup | reco:run | test | test:reco | test:e2e | lint | typecheck | verify
+npm run dev | worker | db:up | db:migrate | db:seed | db:reset | seed:orders | import:orders | reco:setup | reco:run | test | test:reco | test:e2e | perf:menu | load:test | demo:replay-webhook | lint | typecheck | verify
 
 ## Hard rules
 - Money is integer rupiah. All tax/rounding arithmetic lives in src/lib/money.ts.
@@ -137,14 +137,14 @@ Ask instead of inventing requirements. If a doc is ambiguous, propose a change t
 
 **Demo script (≈ 8 minutes)**
 
-1. Reset: `npm run db:reset && npm run db:seed && npm run seed:orders`.
+1. Reset: `npm run db:reset -- --yes && npm run db:seed && npm run seed:orders` (setup in the README section "Running the demo").
 2. Run `npm run reco:run`; open the rules table and explain support, confidence and lift for two rules. State clearly that the order history is **seeded**.
 3. Phone scans the table QR → menu → adds Kopi Susu → sheet suggests Croissant (from the rule) → add → pay.
 4. Mock-pay → phone shows the order number; Counter tablet chimes.
 5. Barista taps Start, then Ready → phone vibrates and shows "Pesanan siap diambil!"; TV board moves the number to Ready; tap Collected.
 6. Walk-in order at the Counter; customer "paid with the stall QR" → manual confirmation with owner PIN → show the audit log row.
 7. Create an order and let it expire (set `order_expiry_minutes` to 1 for the demo) → status shows expired; no queue number was used.
-8. Replay the same webhook twice → show it is processed once.
+8. Replay the same webhook twice (`npm run demo:replay-webhook -- <publicToken>` on an unpaid order) → show it is processed once (`paid`, then `duplicate`).
 
 ## 7. Seed order generator (specification)
 
@@ -236,6 +236,6 @@ Keep this table up to date at the end of each session.
 | Phase | Tasks done | Notes |
 |---|---|---|
 | 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
-| 1 | 16 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ P1-15 ✔ P1-16 ✔ |
+| 1 | 17 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ P1-15 ✔ P1-16 ✔ P1-17 ✔ |
 | 2 | 0 / 8 | |
 | 3 | 0 / 8 | |

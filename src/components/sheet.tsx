@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "@/i18n";
+import { useReturnFocus } from "@/lib/use-return-focus";
 
 // Bottom sheet (Design §5; Figma "Sheet header" 5:255): drag handle, title,
 // scrolling content and a sticky action bar. Radix Dialog traps focus, closes
@@ -29,6 +30,7 @@ export function Sheet({
   showClose = true,
   children,
 }: SheetProps) {
+  const returnFocus = useReturnFocus();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
@@ -36,6 +38,7 @@ export function Sheet({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40 motion-safe:animate-fade-in" />
         <Dialog.Content
           {...(description ? {} : { "aria-describedby": undefined })}
+          {...returnFocus}
           className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[90dvh] w-full max-w-120 flex-col rounded-t-sheet bg-surface pb-[env(safe-area-inset-bottom)] shadow-sheet outline-none motion-safe:animate-sheet-in motion-reduce:animate-fade-in"
         >
           <div className="flex flex-col items-center pt-2">

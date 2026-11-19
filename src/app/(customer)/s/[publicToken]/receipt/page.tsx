@@ -107,13 +107,6 @@ async function Receipt({ publicToken }: { publicToken: string }) {
           <dt className="text-label text-ink">{t("cart.total")}</dt>
           <dd className="text-label text-ink">{formatRupiah(order.total)}</dd>
         </div>
-        {order.taxInclusive && order.taxAmount > 0 && (
-          <p className="text-caption text-ink-muted">
-            {t("receipt.taxIncluded", {
-              amount: formatRupiah(order.taxAmount),
-            })}
-          </p>
-        )}
         {order.payment && (
           <div className={`${row} pt-2`}>
             <dt className="text-ink-muted">{t("receipt.paymentMethod")}</dt>
@@ -121,6 +114,14 @@ async function Receipt({ publicToken }: { publicToken: string }) {
           </div>
         )}
       </dl>
+      {order.taxInclusive && order.taxAmount > 0 && (
+        // Outside the list: a <dl> may only hold dt/dd groups.
+        <p className="-mt-3 text-caption text-ink-muted">
+          {t("receipt.taxIncluded", {
+            amount: formatRupiah(order.taxAmount),
+          })}
+        </p>
+      )}
 
       <p className="text-center text-label text-ink">{t("receipt.thanks")}</p>
 

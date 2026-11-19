@@ -232,6 +232,25 @@ export async function mockPay(
   return handlePaymentWebhook("mock", body, headers, { now });
 }
 
+// Demo step 8 (Plan §6, `npm run demo:replay-webhook`): one signed mock
+// "paid" event for the charge, with a fixed event id, so it can be sent to
+// the webhook route more than once. Mock provider only.
+export async function signedMockPaidEvent(
+  paymentId: string,
+): Promise<{ body: string; headers: Headers }> {
+  const env = getEnv();
+  if (env.PAYMENT_PROVIDER !== "mock") throw new AppError("NOT_FOUND");
+  const payment = await repo.selectPaymentById(paymentId);
+  if (!payment?.providerRef || payment.provider !== "mock") {
+    throw new AppError("NOT_FOUND");
+  }
+  return signMockEvent(env.PAYMENT_WEBHOOK_SECRET, {
+    eventId: `mock_evt_${randomToken(16)}`,
+    providerRef: payment.providerRef,
+    type: "paid",
+  });
+}
+
 // Schema §5.3: an expiring order takes its pending charge with it. Runs in the
 // caller's transaction with the order locked; returns the charges to cancel
 // at the provider after commit (cancelCharges).

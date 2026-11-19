@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { t } from "@/i18n";
 import { cn } from "@/lib/cn";
+import { useReturnFocus } from "@/lib/use-return-focus";
 
 // Counter dialogs (Design §6.2, §8): a centred dialog (S-03, S-04, S-05,
 // S-07) or a drawer from the right (S-06, S-08). Radix Dialog traps focus,
@@ -32,6 +33,7 @@ export function Modal({
   className,
 }: ModalProps) {
   const drawer = placement === "drawer";
+  const returnFocus = useReturnFocus();
   return (
     <Dialog.Root
       open
@@ -43,6 +45,7 @@ export function Modal({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-ink/40 motion-safe:animate-fade-in" />
         <Dialog.Content
           {...(description ? {} : { "aria-describedby": undefined })}
+          {...returnFocus}
           onEscapeKeyDown={(event) => {
             if (!onClose) event.preventDefault();
           }}

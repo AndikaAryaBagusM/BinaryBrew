@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { type NextRequest, NextResponse } from "next/server";
 import type { z } from "zod";
 import { t } from "@/i18n";
@@ -95,7 +96,9 @@ export async function readJson<T>(
 }
 
 // Wraps a handler so thrown errors become the standard error response. A
-// plain Response is allowed for streams (lib/sse.ts).
+// plain Response is allowed for streams (lib/sse.ts). Next.js's own control
+// errors (for example "bail out of prerendering" when a GET handler reads
+// cookies during the build) are rethrown for Next.js to handle.
 export function route<R extends Response = NextResponse>(
   handler: (request: NextRequest) => Promise<R>,
 ) {
@@ -103,6 +106,7 @@ export function route<R extends Response = NextResponse>(
     try {
       return await handler(request);
     } catch (error) {
+      unstable_rethrow(error);
       return errorResponse(error);
     }
   };
@@ -123,6 +127,7 @@ export function routeWithParams<P>(
     try {
       return await handler(request, context);
     } catch (error) {
+      unstable_rethrow(error);
       return errorResponse(error);
     }
   };

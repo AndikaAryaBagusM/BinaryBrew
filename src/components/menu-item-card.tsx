@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { t } from "@/i18n";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/money";
@@ -7,6 +7,8 @@ import type { PublicMenuItem } from "@/modules/menu/service";
 // Menu card (Design §5, C-01): name, short description, price and a "+"
 // button. Sold-out items stay visible, greyed, with "Habis" and a disabled
 // button. Without a photo, an accent tile shows the first letter (§4.5).
+// A promoted item shows a small "Rekomendasi" tag next to the price (Figma
+// "Menu card" 5:67), not when it is sold out.
 export type MenuItemCardProps = {
   item: PublicMenuItem;
   onAdd?: () => void;
@@ -45,14 +47,22 @@ export function MenuItemCard({ item, onAdd }: MenuItemCardProps) {
           </p>
         )}
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span
-            className={cn(
-              "text-label",
-              soldOut ? "text-ink-muted line-through" : "text-price",
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              className={cn(
+                "text-label",
+                soldOut ? "text-ink-muted line-through" : "text-price",
+              )}
+            >
+              {formatRupiah(item.price)}
+            </span>
+            {item.isPromoted && !soldOut && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-caption font-medium text-brand">
+                <Sparkles aria-hidden="true" size={14} />
+                {t("menu.recommended")}
+              </span>
             )}
-          >
-            {formatRupiah(item.price)}
-          </span>
+          </div>
           <div className="flex items-center gap-2">
             {soldOut && (
               <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-caption font-semibold text-ink-muted">

@@ -34,6 +34,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 
 | Package                  | Version |
 | ------------------------ | ------- |
+| `@axe-core/playwright`   | 4.14.0  |
 | `@playwright/test`       | 1.64.1  |
 | `@tailwindcss/turbopack` | 4.3.3   |
 | `@types/node`            | 24.19.2 |
@@ -45,6 +46,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | `eslint-config-next`     | 16.4.2  |
 | `eslint-config-prettier` | 10.1.8  |
 | `husky`                  | 9.1.7   |
+| `lighthouse`             | 13.6.0  |
 | `lint-staged`            | 17.6.0  |
 | `prettier`               | 3.9.10  |
 | `tailwindcss`            | 4.3.3   |

@@ -56,7 +56,8 @@ function parsePercent(text: string): number | null {
 }
 
 const hours = Array.from({ length: 7 }, (_, hour) => `0${hour}:00`);
-const expiryMinutes = [5, 10, 15, 20, 30];
+// 1 minute is for the demo (Plan §6 step 7).
+const expiryMinutes = [1, 5, 10, 15, 20, 30];
 const autoCompleteMinutes = [15, 30, 45, 60, 90, 120];
 const retentionMonths = [6, 12, 24, 36, 60];
 

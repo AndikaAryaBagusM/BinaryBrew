@@ -42,6 +42,7 @@ Vitest, Playwright, pino. Python 3 + mlxtend for the Apriori job. Exact versions
 - Schema change: `npm run db:generate -- --name=<what_changed>`, review the SQL, `npm run db:migrate`
 - Order history: `npm run seed:orders` (demo orders, `--replace` to redo; see scripts/README.md), `npm run import:orders -- <file.csv> [--dry-run]`
 - Recommendations: `npm run reco:setup` once (Python 3.13 venv in jobs/apriori/.venv), then `npm run reco:run`; `npm run test:reco` runs pytest
+- Demo and exit checks: `npm run db:reset` (local dev DB only, asks first), `npm run perf:menu` (Lighthouse; needs `build` + `start`), `npm run load:test` (against a running app), `npm run demo:replay-webhook -- <publicToken>`; steps in README "Running the demo"
 
 ## Definition of done
 `npm run verify` passes; new behaviour has tests; docs updated if a rule, route or table changed;
