@@ -1,7 +1,14 @@
 "use client";
 
-import { Ban, QrCode, SlidersHorizontal } from "lucide-react";
-import { type Ref, useImperativeHandle, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Ban, Plus, QrCode, SlidersHorizontal, Sparkles } from "lucide-react";
+import {
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/components/button";
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { t } from "@/i18n";
@@ -16,6 +23,12 @@ import {
 import { getClientSession, newClientToken } from "@/lib/client-session";
 import { cn } from "@/lib/cn";
 import { formatRupiah } from "@/lib/money";
+import {
+  answerSuggestion,
+  defaultLine,
+  fetchSuggestions,
+  type SuggestionData,
+} from "@/lib/suggestions";
 import { type CartLine, priceOrder } from "@/modules/orders/pricing";
 import {
   api,
@@ -35,6 +48,9 @@ import {
 // when it has options. "Bayar" creates the order on the server, which prices
 // it, and opens S-04 with its QRIS charge. The handle takes lines from S-03
 // and lets S-04 ask for a new charge of the same cart after one expired.
+// Under the cart, the top suggestion for the staff to offer (Figma 14:4,
+// Flow §5.3); "Tambah" adds it, "Bayar" without it logs it as rejected, and
+// the order links the suggestion events of this cart (FR-RC-04).
 export type PosPanelHandle = {
   add: (line: CartLine) => void;
   charge: () => void;
@@ -70,6 +86,35 @@ export function PosPanel({
     available.length > 0
       ? priceOrder(toCartLines(available), items, menu.pricing)
       : null;
+  // Suggestion events of this cart: shown ones and their answers.
+  const cartEvents = useRef<number[]>([]);
+  const answers = useRef<Promise<unknown>[]>([]);
+  // A suggestion whose options are being chosen in S-03.
+  const pendingAccept = useRef<SuggestionData | null>(null);
+  const cartItemIds = [...new Set(available.map((e) => e.menuItemId))].sort();
+  const cartKey = cartItemIds.join(",");
+  useEffect(() => {
+    if (cartKey === "") cartEvents.current = [];
+  }, [cartKey]);
+  const { data: suggestion } = useQuery({
+    queryKey: ["counter", "suggestion", cartKey],
+    enabled: cartKey !== "",
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const [top] = await fetchSuggestions("/api/counter/recommendations", {
+        clientSession: getClientSession(localStorage),
+        itemIds: cartKey.split(","),
+        shownEventIds: cartEvents.current.slice(-20),
+      });
+      if (top && !cartEvents.current.includes(top.eventId)) {
+        cartEvents.current.push(top.eventId);
+      }
+      return top ?? null;
+    },
+  });
+  const offer = cartKey !== "" ? (suggestion ?? null) : null;
+
   const shown =
     category === null
       ? items
@@ -77,6 +122,7 @@ export function PosPanel({
 
   function tap(item: CounterMenuItemData) {
     setMessage(null);
+    pendingAccept.current = null;
     if (item.modifierGroups.length > 0) onCustomize(item);
     else add({ menuItemId: item.id, quantity: 1, modifierOptionIds: [] });
   }
@@ -88,13 +134,46 @@ export function PosPanel({
       full = result.result === "full";
       return result.entries;
     });
-    if (full) setMessage(t("cart.full"));
+    if (full) {
+      setMessage(t("cart.full"));
+      return;
+    }
+    const pending = pendingAccept.current;
+    if (pending?.menuItemId === line.menuItemId) {
+      pendingAccept.current = null;
+      logAnswer(pending.eventId, "accepted");
+    }
+  }
+
+  function logAnswer(eventId: number, action: "accepted" | "rejected") {
+    answers.current.push(
+      answerSuggestion(getClientSession(localStorage), eventId, action).then(
+        (id) => {
+          if (id !== null) cartEvents.current.push(id);
+        },
+      ),
+    );
+  }
+
+  // "Tambah" on the suggestion row: default options, or S-03 when a
+  // required group has no default.
+  function acceptOffer(offered: SuggestionData) {
+    setMessage(null);
+    const item = items.find((i) => i.id === offered.menuItemId);
+    if (!item) return;
+    pendingAccept.current = offered;
+    const line = defaultLine(item);
+    if (line) add(line);
+    else onCustomize(item);
   }
 
   async function charge() {
     if (!order || soldOut.size > 0) return;
     setSending(true);
     setMessage(null);
+    if (offer) logAnswer(offer.eventId, "rejected");
+    await Promise.all(answers.current);
+    answers.current = [];
     attempt.current ??= newClientToken();
     const result = await api<Omit<Charge, "summary">>("/api/counter/orders", {
       method: "POST",
@@ -102,6 +181,9 @@ export function PosPanel({
       body: {
         clientSession: getClientSession(localStorage),
         items: toCartLines(available),
+        ...(cartEvents.current.length > 0
+          ? { recommendationEventIds: cartEvents.current.slice(0, 20) }
+          : {}),
       },
     });
     // A server error may still have created the order: keep the key.
@@ -204,6 +286,9 @@ export function PosPanel({
         {soldOut.size > 0 && (
           <p className="text-body text-danger">{t("cart.soldOutNote")}</p>
         )}
+        {offer && (
+          <SuggestionRow offer={offer} onAdd={() => acceptOffer(offer)} />
+        )}
         <Button
           size="counter"
           className="w-full"
@@ -218,6 +303,42 @@ export function PosPanel({
         </Button>
       </section>
     </main>
+  );
+}
+
+function SuggestionRow({
+  offer,
+  onAdd,
+}: {
+  offer: SuggestionData;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-card bg-accent-soft py-2 pr-2 pl-4">
+      <Sparkles aria-hidden="true" size={24} className="shrink-0 text-brand" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-label text-ink">
+          {t("counter.recoOffer", {
+            name: offer.name,
+            price: formatRupiah(offer.price),
+          })}
+        </p>
+        <p className="truncate text-caption text-ink-muted">
+          {offer.source === "rule"
+            ? t("counter.recoBecause", { items: offer.because.join(", ") })
+            : t("counter.recoPromoted")}
+        </p>
+      </div>
+      <Button
+        variant="secondary"
+        size="counter"
+        icon={<Plus aria-hidden="true" />}
+        aria-label={t("menu.addItem", { name: offer.name })}
+        onClick={onAdd}
+      >
+        {t("reco.add")}
+      </Button>
+    </div>
   );
 }
 

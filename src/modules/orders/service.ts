@@ -26,6 +26,7 @@ import {
   type PaymentSummary,
   recordSeedPayments,
 } from "@/modules/payments/service";
+import { linkSuggestionEvents } from "@/modules/recommendations/service";
 import { getSettings } from "@/modules/settings/service";
 import { type CsvProblem, readOrderCsv } from "./order-csv";
 import { type CartLine, priceOrder } from "./pricing";
@@ -74,6 +75,7 @@ export type SelfOrderInput = {
   clientSession: string;
   idempotencyKey: string;
   items: CartLine[];
+  recommendationEventIds?: number[];
 };
 
 type OrderRow = Awaited<ReturnType<typeof repo.insertOrder>>;
@@ -153,6 +155,7 @@ type NewOrder = {
   clientSession: string;
   idempotencyKey: string;
   items: CartLine[];
+  recommendationEventIds?: number[];
 } & (
   | { channel: "self_order"; qrTokenId: string; openOrderCap: true }
   | { channel: "counter"; createdBy: string }
@@ -266,6 +269,13 @@ async function insertOrder(
           priceDeltaSnapshot: modifier.priceDelta,
         })),
       ),
+      tx,
+    );
+    // FR-RC-04: the suggestions shown, accepted or rejected for this cart.
+    await linkSuggestionEvents(
+      order.id,
+      input.clientSession,
+      input.recommendationEventIds ?? [],
       tx,
     );
 

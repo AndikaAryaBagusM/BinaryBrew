@@ -125,7 +125,7 @@ binary-brew/
 │  │  ├─ payments/            # service.ts, repo.ts, provider.ts (interface), providers/mock.ts
 │  │  ├─ menu/                # items, categories, modifiers
 │  │  ├─ inventory/           # ingredients, recipes, movements, restock, count
-│  │  ├─ recommendations/     # scoring.ts, repo.ts, events.ts
+│  │  ├─ recommendations/     # service.ts (job, suggestions, events), scoring.ts, schemas.ts, repo.ts
 │  │  ├─ auth/                # sessions, pin, devices, elevation, rate-limit
 │  │  ├─ reports/
 │  │  ├─ settings/
@@ -175,8 +175,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | `GET /api/public/orders/{publicToken}` | Token | Status, items with options, totals, queue number, payment (QR string only while it can be paid), menu path. `no-store`; 404 for an unknown token. |
 | `POST /api/public/orders/{publicToken}/cancel` | Token, same origin | C-05 "Kembali ke keranjang": an unpaid self-order expires now with its pending charge (charge cancelled at the provider, best effort). Any other order is left unchanged (BR-06). Returns `{status}`. |
 | `GET /api/stream/orders/{publicToken}` | Token | SSE: `order` events `{status, queueNumber}` for that order, the current state first. 404 for an unknown token. |
-| `POST /api/public/recommendations` | Public + rate limit | Body: cart item ids + `clientSession`; returns up to 2 suggestions. |
-| `POST /api/public/recommendations/events` | Public + rate limit | Log `shown`/`accepted`/`rejected`. |
+| `POST /api/public/recommendations` | Public + rate limit | C-04. Body: `clientSession`, `itemIds[]` (the cart's items), optional `shownEventIds[]`. Returns up to `reco_max_items` `suggestions[{eventId, menuItemId, name, price, source, because[]}]` (`because`: names of the cart items the rule starts from; empty for `promoted`), each logged as `shown`; a suggestion for the same item and rule as one of `shownEventIds` reuses that event. `no-store`. 30 per minute per IP, 20 per `clientSession`. |
+| `POST /api/public/recommendations/events` | Public + rate limit | `accepted` or `rejected` for a `shown` event: `clientSession`, `eventId`, `action`. The item, rule, source and score are copied from the shown event; the first answer wins (a repeat returns it). 404 for an event of another client, already linked to an order, or not `shown`. 201 with `{eventId}`. 60 per minute per IP, 30 per `clientSession`. |
 | `GET /api/public/board` | Public | `{preparing: number[], ready: number[]}`: queue numbers only (D19), Preparing oldest first, Ready newest first. Every unfinished order, like the Counter queue. Never cached. |
 | `GET /api/stream/board` | Public | SSE for the TV board: an empty `change` event when an order enters, moves on or leaves the board, and `sync` once listening; no order data. The board then refetches `GET /api/public/board`. |
 
@@ -206,7 +206,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 |---|---|---|
 | `GET /api/counter/orders?status=` | Staff | Paid queue (`paid`, `preparing`, `ready`), oldest payment first, never cached. The `status` filter for recent orders is not built yet. |
 | `GET /api/counter/menu` | Staff | Menu for the POS grid and S-08: categories, items with modifier groups, availability and who marked an item sold out (name, time), pricing settings and whether manual confirmation needs the owner PIN. Never cached; ignores `ordering_enabled`. |
-| `POST /api/counter/orders` | Staff | Create a walk-in order (same service as self-order, channel `counter`, `created_by` the staff user) and its QRIS charge. `Idempotency-Key` header; 201 for a new order, 200 for a repeat. No open-order cap (BR-11 is per customer device). |
+| `POST /api/counter/orders` | Staff | Create a walk-in order (same service as self-order, channel `counter`, `created_by` the staff user) and its QRIS charge. `Idempotency-Key` header; 201 for a new order, 200 for a repeat. No open-order cap (BR-11 is per customer device). Optional `recommendationEventIds[]`, as for self-order. |
+| `POST /api/counter/recommendations` | Staff | S-02 suggestion row: the same body and service as `POST /api/public/recommendations`, top suggestion only. Answers go to `POST /api/public/recommendations/events`. |
 | `GET /api/counter/orders/{id}` | Staff | One order for S-04 and S-06: lines, totals, status times, channel, table label, creator, payment (method, status, QR string while pending, reference). |
 | `POST /api/counter/orders/{id}/cancel` | Staff | Cancel an unpaid counter order from S-04 (it becomes `expired`, its charge is cancelled). Any other order is returned unchanged with its status. |
 | `POST /api/counter/orders/{id}/status` | Staff/Barista | `preparing`, `ready`, `completed`, one step forward only. 409 `ORDER_STATUS_CHANGED` (with the current status) if the order already moved. |
@@ -351,7 +352,9 @@ The thresholds are read from the `settings` table (keys `reco_min_support`, `rec
 3. For each candidate: `score = confidence × (1 + promote_weight × is_promoted) × (1 + margin_weight × margin_pct)`, where `margin_pct` is in 0–1 and is 0 if the item has no complete recipe.
 4. Keep the best score per consequent; return the top `reco_max_items` (default 2).
 5. If there are no candidates, optionally return one promoted available item; else none.
-6. Log each suggestion as a `recommendation_events` row (`shown`), and later `accepted` or `rejected`.
+6. Log each suggestion as a `recommendation_events` row (`shown`), and later `accepted` or `rejected`. The order links the events of its checkout: the client sends their ids as `recommendationEventIds[]` (at most 20) and the order transaction sets `order_id` on those of the same `clientSession` not yet linked (Schema §5.1).
+
+The score is stored rounded to 4 decimals; a `promoted` fallback has no rule and no score. The margin factor is neutral (0) until recipes and costs exist (P2-08). C-04 asks once per cart visit when "Bayar" is tapped and skips the sheet on an error or after 1.5 s; the Counter asks after each cart change and shows the top suggestion.
 
 **Running it:** once, `npm run reco:setup` creates the virtual environment `jobs/apriori/.venv` (Python 3.13) and installs the pinned packages (docs/versions.md). `npm run reco:run` then runs `jobs/apriori/run.py` with it against `DATABASE_URL` and prints the run, the basket count (and how many are seeded) and the top rules by lift. The worker also starts it between 03:00 and 04:00 Asia/Jakarta if the machine is on, once per night and only when no run (also a manual one) has started since 03:00; the outcome goes to the worker log. Only one run at a time (advisory lock); a second one reports `already_running`. The job is deterministic for the same data, so results can be reproduced in the demo. The database driver is pg8000 (pure Python).
 

@@ -514,3 +514,23 @@ export function getItemCatalog(db: DbExecutor = getDb()) {
 export function listActiveQrCodes(db: DbExecutor = getDb()) {
   return repo.selectActiveQrCodes(db);
 }
+
+export type SuggestionItem = {
+  id: string;
+  name: string;
+  price: number;
+  isAvailable: boolean;
+  isPromoted: boolean;
+};
+
+// Items a recommendation may offer (Tech §10), in menu order. Availability
+// uses the manual flag until P2-03 adds stock, like getOrderableItems.
+export async function getSuggestionItems(
+  db: DbExecutor = getDb(),
+): Promise<SuggestionItem[]> {
+  const rows = await repo.selectSuggestionItems(db);
+  return rows.map(({ manualSoldOut, ...item }) => ({
+    ...item,
+    isAvailable: !manualSoldOut,
+  }));
+}

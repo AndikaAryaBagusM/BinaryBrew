@@ -221,7 +221,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 
 **C-03 Cart.** Lines with name, chosen options (small text), quantity stepper, line price. Total. A short note "Harga sudah termasuk pajak" (when tax is on). Primary button "Bayar dengan QRIS". Empty state: "Keranjang masih kosong" with a button back to the menu.
 
-**C-04 Recommendation sheet.** Appears once, after tapping Pay, before the payment is created. Title "Sering dipesan bersama". Up to 2 cards with name, price and "Tambah". Buttons: "Tambah" per card; "Lanjut bayar" as the primary action; there is no way to get stuck. If nothing to suggest, skip the sheet. Never show it more than once per checkout. Confidence percentages are **not** shown to customers.
+**C-04 Recommendation sheet.** Appears once, after tapping Pay, before the payment is created. Title "Sering dipesan bersama". Up to 2 cards with name, price and "Tambah". Buttons: "Tambah" per card; "Lanjut bayar" as the primary action; there is no way to get stuck. If nothing to suggest, skip the sheet. Never show it more than once per checkout. Confidence percentages are **not** shown to customers. The line "Pelanggan lain sering menambahkan ini…" shows only for suggestions from rules, not for the promoted fallback. "Tambah" turns the card into "Ditambahkan" and the button into "Lanjut bayar • {total}"; an item whose required option has no default opens C-02 first. Closing the sheet also goes on to payment.
 
 **C-05 Payment.** Large QR, amount in display style ("Rp 40.000"), countdown ("Bayar dalam 09:41"), short instruction ("Buka aplikasi bank atau e-wallet, scan, lalu bayar"). Nothing to tap while waiting except "Kembali ke keranjang" (cancels the pending charge only if unpaid). On success the screen transitions to C-06 automatically. *Mock provider only:* a clearly marked "Simulasi bayar" button appears in development builds.
 
@@ -245,7 +245,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 
 **S-01 Staff select and PIN.** Grid of name tiles (large), then a PIN pad. Lock overlay re-uses the pad and also shows the count of waiting orders and a muted chime indicator. Errors: "PIN salah. Sisa percobaan: 3" and "Akun terkunci 5 menit".
 
-**S-02 Counter.** See §6.2. Interactions: tap item to add (or open S-03 if it has modifiers); cart shows lines and total; "Bayar" opens S-04. Queue cards: new orders pulse once and chime; "Mulai" and "Siap" and "Diambil" are the primary actions; tapping the card body opens S-06. The header shows "Habis" (S-08) for now: "Restock" arrives with S-09 (Phase 2) and "Pesanan hari ini" with the recent-orders filter of `GET /api/counter/orders`. When an S-04 charge expires, "Buat QR baru" charges the same cart again.
+**S-02 Counter.** See §6.2. Interactions: tap item to add (or open S-03 if it has modifiers); cart shows lines and total; "Bayar" opens S-04. Queue cards: new orders pulse once and chime; "Mulai" and "Siap" and "Diambil" are the primary actions; tapping the card body opens S-06. The header shows "Habis" (S-08) for now: "Restock" arrives with S-09 (Phase 2) and "Pesanan hari ini" with the recent-orders filter of `GET /api/counter/orders`. When an S-04 charge expires, "Buat QR baru" charges the same cart again. Under the cart lines, the top suggestion for the cart (Figma 14:4): "Tawarkan {name} · {price}", "Sering dibeli bersama {items}" (or "Menu rekomendasi" for the promoted fallback) and "Tambah"; there is no dismiss button, and "Bayar" logs a suggestion that was not added as rejected.
 
 **S-03 POS customization.** Same content as C-02 in a centred dialog with larger targets.
 
@@ -340,6 +340,10 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `reco.title` | Sering dipesan bersama |
 | `reco.add` | Tambah |
 | `reco.continue` | Lanjut bayar |
+| `reco.continueTotal` | Lanjut bayar • {total} |
+| `reco.description` | Pelanggan lain sering menambahkan ini dengan pesanan seperti punyamu. |
+| `reco.added` | Ditambahkan |
+| `reco.totalNow` | Total sekarang |
 | `pay.instruction` | Buka aplikasi bank atau e-wallet, scan, lalu bayar |
 | `pay.countdown` | Bayar dalam {time} |
 | `pay.expired` | Waktu pembayaran habis |
@@ -447,6 +451,9 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.cartEmpty` | Ketuk menu untuk mulai pesanan. |
 | `counter.removeLine` | Hapus {name} |
 | `counter.charge` | Bayar • {price} |
+| `counter.recoOffer` | Tawarkan {name} · {price} |
+| `counter.recoBecause` | Sering dibeli bersama {items} |
+| `counter.recoPromoted` | Menu rekomendasi |
 | `counter.chargeSoldOut` | Habis: {items}. Hapus dari pesanan dulu. |
 | `counter.optional` | Opsional · maks {n} |
 | `counter.addToOrder` | Tambah ke pesanan • {price} |
