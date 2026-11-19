@@ -13,7 +13,10 @@ import {
 
 // Recreates the e2e database before every Playwright run: migrations, the
 // normal seed, then what the specs rely on (11 % inclusive tax, 5 % service
-// charge, and a required group without a default on Roti Bakar). Passes the
+// charge, a required group without a default on Roti Bakar, and two active
+// recommendation rules copied from the Apriori run on the seeded orders:
+// Kopi Susu Gula Aren → Croissant and Americano → Brownie; nothing is
+// promoted, so other carts get no suggestion). Passes the
 // "Meja 1" QR token to the specs as E2E_QR_TOKEN, the counter device cookie
 // as E2E_DEVICE_TOKEN and the owner password (pemilik@e2e.test, random per
 // run) as E2E_OWNER_PASSWORD; every staff PIN is 1470.
@@ -83,6 +86,47 @@ export default async function globalSetup() {
     await db
       .insert(schema.menuItemModifierGroups)
       .values({ menuItemId: roti!.id, groupId: jam!.id });
+
+    // Suggestions are deterministic: only these rules, no promoted fallback.
+    await db.update(schema.menuItems).set({ isPromoted: false });
+    const itemId = async (name: string) =>
+      (
+        await db
+          .select({ id: schema.menuItems.id })
+          .from(schema.menuItems)
+          .where(eq(schema.menuItems.name, name))
+      )[0]!.id;
+    const [run] = await db
+      .insert(schema.associationRuleRuns)
+      .values({
+        status: "succeeded",
+        finishedAt: new Date(),
+        minSupport: "0.02",
+        minConfidence: "0.15",
+        minLift: "1.05",
+        note: "e2e: rules copied from the seeded run",
+      })
+      .returning();
+    await db.insert(schema.associationRules).values([
+      {
+        runId: run!.id,
+        antecedent: [await itemId("Kopi Susu Gula Aren")],
+        consequentId: await itemId("Croissant"),
+        support: "0.10761",
+        confidence: "0.35537",
+        lift: "2.0822",
+        isActive: true,
+      },
+      {
+        runId: run!.id,
+        antecedent: [await itemId("Americano")],
+        consequentId: await itemId("Brownie"),
+        support: "0.04304",
+        confidence: "0.25220",
+        lift: "2.9468",
+        isActive: true,
+      },
+    ]);
 
     const [qr] = await db
       .select({ token: schema.qrTokens.token })

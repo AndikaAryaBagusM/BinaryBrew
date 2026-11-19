@@ -327,3 +327,25 @@ export function selectActiveQrCodes(db: DbExecutor = getDb()) {
     .where(eq(qrTokens.isActive, true))
     .orderBy(asc(qrTokens.label));
 }
+
+// Recommendations (Tech §10): active items of active categories in menu
+// order, with the promote flag.
+export function selectSuggestionItems(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: menuItems.id,
+      name: menuItems.name,
+      price: menuItems.price,
+      isPromoted: menuItems.isPromoted,
+      manualSoldOut: menuItems.manualSoldOut,
+    })
+    .from(menuItems)
+    .innerJoin(categories, eq(categories.id, menuItems.categoryId))
+    .where(and(eq(menuItems.isActive, true), eq(categories.isActive, true)))
+    .orderBy(
+      asc(categories.sortOrder),
+      asc(categories.name),
+      asc(menuItems.sortOrder),
+      asc(menuItems.name),
+    );
+}

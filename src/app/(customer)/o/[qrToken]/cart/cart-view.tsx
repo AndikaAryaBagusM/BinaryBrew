@@ -9,6 +9,7 @@ import { QuantityStepper } from "@/components/quantity-stepper";
 import { Sheet } from "@/components/sheet";
 import { t } from "@/i18n";
 import {
+  addToCart,
   reconcileCart,
   removeLine,
   setLineQuantity,
@@ -17,10 +18,18 @@ import {
 import { getClientSession, newClientToken } from "@/lib/client-session";
 import { formatRupiah } from "@/lib/money";
 import { rememberOrder } from "@/lib/recent-orders";
+import {
+  answerSuggestion,
+  defaultLine,
+  fetchSuggestions,
+  type SuggestionData,
+} from "@/lib/suggestions";
 import { updateCart, useCartEntries } from "@/lib/use-cart";
 import type { PublicMenu } from "@/modules/menu/service";
-import { priceOrder } from "@/modules/orders/pricing";
+import { type CartLine, priceOrder } from "@/modules/orders/pricing";
+import { CustomizeSheet } from "../customize-sheet";
 import { MenuSkeleton } from "../menu-skeleton";
+import { SuggestionSheet } from "./suggestion-sheet";
 
 // localStorage, which every tab of this browser shares.
 const localStore = {
@@ -31,6 +40,11 @@ const localStore = {
 
 type Checkout =
   | { kind: "idle" | "sending" }
+  | {
+      kind: "suggesting";
+      suggestions: SuggestionData[];
+      added: ReadonlySet<number>;
+    }
   | { kind: "soldOut"; items: { menuItemId: string; name: string }[] }
   | { kind: "priceChanged"; publicToken: string; total: number }
   | { kind: "error"; message: string };
@@ -39,7 +53,9 @@ type Checkout =
 // totals from the pricing service. Lines whose item sold out since they were
 // added show "Habis", are left out of the total and block payment.
 // "Bayar dengan QRIS" creates the order (FR-CO-06); the server's refusals and
-// a changed total (Flow E6) are shown before any QR.
+// a changed total (Flow E6) are shown before any QR. Before that, C-04
+// offers up to 2 suggestions once per visit (FR-CO-05, Flow §7); the order
+// links the suggestion events of this checkout (FR-RC-04).
 export function CartView({
   menu,
   qrToken,
@@ -63,6 +79,11 @@ export function CartView({
   // The Idempotency-Key of the attempt in flight: kept until the server
   // answers, so a retry after a network error cannot create a second order.
   const attempt = useRef<string | null>(null);
+  // C-04 shows at most once per visit; its events go with the order.
+  const offered = useRef(false);
+  const eventIds = useRef<number[]>([]);
+  const answers = useRef<Promise<unknown>[]>([]);
+  const [customizing, setCustomizing] = useState<SuggestionData | null>(null);
 
   // Forget lines whose item or options left the menu.
   useEffect(() => {
@@ -100,9 +121,86 @@ export function CartView({
       : undefined;
   const { taxInclusive, taxRateBps } = menu.pricing;
 
+  // "Bayar dengan QRIS": C-04 first, unless it was offered already or there
+  // is nothing to suggest within 1.5 s.
   async function pay() {
     if (!order) return;
     setCheckout({ kind: "sending" });
+    if (!offered.current) {
+      offered.current = true;
+      const suggestions = await fetchSuggestions(
+        "/api/public/recommendations",
+        {
+          clientSession: getClientSession(localStore),
+          itemIds: [...new Set(available.map((e) => e.menuItemId))],
+        },
+      );
+      if (suggestions.length > 0) {
+        eventIds.current.push(...suggestions.map((s) => s.eventId));
+        setCheckout({ kind: "suggesting", suggestions, added: new Set() });
+        return;
+      }
+    }
+    await placeOrder();
+  }
+
+  function logAnswer(eventId: number, action: "accepted" | "rejected") {
+    const logged = answerSuggestion(
+      getClientSession(localStore),
+      eventId,
+      action,
+    ).then((id) => {
+      if (id !== null) eventIds.current.push(id);
+    });
+    answers.current.push(logged);
+  }
+
+  // "Tambah" on C-04: with the default options, or C-02 when a required
+  // group has no default.
+  function accept(suggestion: SuggestionData) {
+    const item = items.find((i) => i.id === suggestion.menuItemId);
+    if (!item) return;
+    const line = defaultLine(item);
+    if (line) addSuggested(suggestion, line);
+    else setCustomizing(suggestion);
+  }
+
+  function addSuggested(suggestion: SuggestionData, line: CartLine) {
+    let result = "added";
+    updateCart((current) => {
+      const next = addToCart(current, line);
+      result = next.result;
+      return next.entries;
+    });
+    if (result === "full") return;
+    setCheckout((current) =>
+      current.kind === "suggesting"
+        ? {
+            ...current,
+            added: new Set(current.added).add(suggestion.eventId),
+          }
+        : current,
+    );
+    logAnswer(suggestion.eventId, "accepted");
+  }
+
+  // "Lanjut bayar" or closing C-04: the rest is rejected, then the order.
+  async function continueToPay(
+    state: Extract<Checkout, { kind: "suggesting" }>,
+  ) {
+    setCheckout({ kind: "sending" });
+    for (const suggestion of state.suggestions) {
+      if (!state.added.has(suggestion.eventId)) {
+        logAnswer(suggestion.eventId, "rejected");
+      }
+    }
+    await Promise.all(answers.current);
+    answers.current = [];
+    await placeOrder();
+  }
+
+  async function placeOrder() {
+    if (!order) return;
     attempt.current ??= newClientToken();
     let response: Response;
     try {
@@ -116,6 +214,9 @@ export function CartView({
           qrToken,
           clientSession: getClientSession(localStore),
           items: toCartLines(entries),
+          ...(eventIds.current.length > 0
+            ? { recommendationEventIds: eventIds.current.slice(0, 20) }
+            : {}),
         }),
       });
     } catch {
@@ -289,6 +390,28 @@ export function CartView({
         </Button>
       </div>
 
+      {checkout.kind === "suggesting" && (
+        <SuggestionSheet
+          suggestions={checkout.suggestions}
+          added={checkout.added}
+          total={order?.total ?? 0}
+          onAdd={accept}
+          onContinue={() => void continueToPay(checkout)}
+        />
+      )}
+      {customizing && (
+        <CustomizeSheet
+          key={customizing.eventId}
+          item={items.find((i) => i.id === customizing.menuItemId)!}
+          onOpenChange={(open) => {
+            if (!open) setCustomizing(null);
+          }}
+          onAdd={(line) => {
+            addSuggested(customizing, line);
+            setCustomizing(null);
+          }}
+        />
+      )}
       {checkout.kind === "soldOut" && (
         <Sheet
           title={t("error.itemSoldOut")}

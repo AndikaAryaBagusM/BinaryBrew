@@ -26,6 +26,12 @@ export const createOrderBody = z.strictObject({
       }),
     )
     .max(MAX_LINES),
+  // Suggestion events of this checkout (C-04, Counter row), linked to the
+  // order (FR-RC-04).
+  recommendationEventIds: z
+    .array(z.int().positive().max(Number.MAX_SAFE_INTEGER))
+    .max(20)
+    .optional(),
 });
 
 // Walk-in order at the Counter (FR-POS-01): the same lines as self-order;
