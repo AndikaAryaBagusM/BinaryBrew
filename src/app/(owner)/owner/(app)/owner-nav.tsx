@@ -1,6 +1,13 @@
 "use client";
 
-import { Boxes, Coffee, LogOut, Settings, Users } from "lucide-react";
+import {
+  Boxes,
+  Coffee,
+  LogOut,
+  Settings,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -18,7 +25,14 @@ const sections: {
 }[] = [
   {
     label: "owner.navSectionMenu",
-    links: [{ href: "/owner/menu", label: "owner.navMenu", icon: Coffee }],
+    links: [
+      { href: "/owner/menu", label: "owner.navMenu", icon: Coffee },
+      {
+        href: "/owner/modifiers",
+        label: "owner.navModifiers",
+        icon: SlidersHorizontal,
+      },
+    ],
   },
   {
     label: "owner.navSectionStock",

@@ -307,7 +307,7 @@ create table order_item_modifiers (
   option_name_snapshot  text not null,
   price_delta_snapshot  integer not null default 0,
   position              smallint not null default 0,            -- option order within the line
-  ingredient_deltas     jsonb not null default '[]'::jsonb      -- [{"ingredientId": "...", "qtyDelta": 9}]
+  ingredient_deltas     jsonb not null default '[]'::jsonb      -- [{"ingredientId": "...", "qtyDelta": "9.000"}], copied from modifier_option_ingredients
 );
 create index order_item_modifiers_item_idx on order_item_modifiers (order_item_id);
 
@@ -680,6 +680,12 @@ Owner enters counted quantities. For each ingredient with a difference, require 
 4. Run Apriori; insert `association_rules` with `is_active = false`.
 5. In one transaction: set all old rules `is_active = false`, set the new run's rules `is_active = true`, mark the run `succeeded`.
 
+### 5.8 Menu prices, modifiers and recipes (Phase 2)
+
+Owner changes to prices, groups, options and recipes (P2-02) run in one transaction each. Lock order: the `menu.prices` advisory lock (whenever a price, a group limit, an option price or an attachment changes), then menu items, modifier groups, modifier options, and last the ingredients they use (`for share`, sorted by id). Before commit, every item affected must keep `price + cheapest allowed option mix ≥ 0` (else `PRICE_NEGATIVE`), so the negative-line refusal in §5.1 step 5 never fires for a real catalog.
+
+An order copies each chosen option's ingredient deltas into `order_item_modifiers.ingredient_deltas` as `[{ingredientId, qtyDelta}]`, `qtyDelta` being the `numeric(12,3)` value as a decimal string (`"9.000"`, `"-150.000"`). Later edits to the option never change an order; stock deduction (P2-04) reads the snapshot.
+
 ## 6. Reference queries
 
 Best sellers and peak hours (owner dashboard):
@@ -761,7 +767,7 @@ where ready_at is not null
 1. Settings (3.9), one owner user (email, password and PIN from the `SEED_*` variables in `.env`), two staff users, one counter device.
 2. Categories, about 12 menu items, modifier groups (Ukuran, Gula, Es, Tambahan) and options.
 3. QR tokens: "Pintu masuk" and "Meja 1" to "Meja 6".
-4. (Phase 2) Suppliers and ingredients, each ingredient with an opening stock movement by the owner and its opening cost (P2-01); recipes follow with P2-02.
+4. (Phase 2) Suppliers and ingredients, each ingredient with an opening stock movement by the owner and its opening cost (P2-01); then a recipe for every menu item and the ingredient deltas of Large (+50 g Es batu), Extra shot (+9 g Biji kopi arabika) and Susu oat (+150 ml Oat milk, −150 ml Susu UHT) (P2-02). Sugar and ice levels stay stock-free (D9). A recipe or delta that already exists is never changed.
 5. About 2,000 synthetic paid orders over 60 days (`is_seed = true`) generated with planted pairings (for example kopi susu + croissant) and realistic evening peaks, so the Apriori job has something to find. The generator is deterministic (fixed random seed) and documented, so the demo can state exactly how the data was made. It is a separate command, `npm run seed:orders` (`client_session = 'seed'`); orders imported from the old POS are also `is_seed` (`client_session = 'import'`, docs/02 §10).
 
 ## 8. Retention and privacy

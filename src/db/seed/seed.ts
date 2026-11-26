@@ -30,6 +30,8 @@ export type SeedSummary = {
   suppliers: number;
   ingredients: number;
   stockMovements: number;
+  recipeItems: number;
+  modifierOptionIngredients: number;
 };
 
 // Idempotent: every row is looked up by its natural key and created only when
@@ -53,6 +55,8 @@ export function seedDatabase(
       suppliers: 0,
       ingredients: 0,
       stockMovements: 0,
+      recipeItems: 0,
+      modifierOptionIngredients: 0,
     };
 
     // 1. Settings (Schema §3.9)
@@ -297,6 +301,81 @@ export function seedDatabase(
       );
       summary.ingredients = created.length;
       summary.stockMovements = created.length;
+    }
+
+    // 9. Recipes and option ingredient deltas (Schema §7 step 4, P2-02),
+    // only for items and options that have none yet: an owner edit is kept.
+    const ingredientIds = new Map(
+      (
+        await tx
+          .select({ id: schema.ingredients.id, name: schema.ingredients.name })
+          .from(schema.ingredients)
+      ).map((row) => [row.name, row.id]),
+    );
+    const ingredientId = (name: string) => {
+      const id = ingredientIds.get(name);
+      if (!id) throw new Error(`seed: unknown ingredient "${name}"`);
+      return id;
+    };
+    const itemIds = new Map(
+      (
+        await tx
+          .select({ id: schema.menuItems.id, name: schema.menuItems.name })
+          .from(schema.menuItems)
+          .where(inArray(schema.menuItems.name, itemNames))
+      ).map((row) => [row.name, row.id]),
+    );
+    const withRecipe = new Set(
+      (
+        await tx
+          .selectDistinct({ id: schema.recipeItems.menuItemId })
+          .from(schema.recipeItems)
+      ).map((row) => row.id),
+    );
+    const recipeRows = Object.entries(data.recipes).flatMap(([item, lines]) => {
+      const menuItemId = itemIds.get(item);
+      if (!menuItemId || withRecipe.has(menuItemId)) return [];
+      return lines.map(([ingredient, qty]) => ({
+        menuItemId,
+        ingredientId: ingredientId(ingredient),
+        qty: fromMilli(toMilli(qty)),
+      }));
+    });
+    if (recipeRows.length > 0) {
+      await tx.insert(schema.recipeItems).values(recipeRows);
+      summary.recipeItems = recipeRows.length;
+    }
+
+    const withDeltas = new Set(
+      (
+        await tx
+          .selectDistinct({ id: schema.modifierOptionIngredients.optionId })
+          .from(schema.modifierOptionIngredients)
+      ).map((row) => row.id),
+    );
+    const deltaRows = [];
+    for (const { group, option, deltas } of data.optionDeltas) {
+      const [row] = await tx
+        .select({ id: schema.modifierOptions.id })
+        .from(schema.modifierOptions)
+        .where(
+          and(
+            eq(schema.modifierOptions.groupId, groupId.get(group)!),
+            eq(schema.modifierOptions.name, option),
+          ),
+        );
+      if (!row || withDeltas.has(row.id)) continue;
+      deltaRows.push(
+        ...deltas.map(([ingredient, qtyDelta]) => ({
+          optionId: row.id,
+          ingredientId: ingredientId(ingredient),
+          qtyDelta: fromMilli(toMilli(qtyDelta)),
+        })),
+      );
+    }
+    if (deltaRows.length > 0) {
+      await tx.insert(schema.modifierOptionIngredients).values(deltaRows);
+      summary.modifierOptionIngredients = deltaRows.length;
     }
 
     return summary;

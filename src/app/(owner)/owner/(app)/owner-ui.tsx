@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type ReactNode, useCallback, useId } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useId } from "react";
 import { Switch } from "@/components/switch";
 import type { ApiResult } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -171,6 +171,103 @@ export function SwitchRow({
         aria-describedby={help ? `${id}-help` : undefined}
         onCheckedChange={onChange}
       />
+    </div>
+  );
+}
+
+// Tabs of a side panel (O-06 Detail / Resep / Pilihan): the WAI-ARIA tabs
+// pattern, arrow keys move between tabs. The caller renders the panel with
+// tabPanelProps(idBase, value).
+export function Tabs<T extends string>({
+  idBase,
+  label,
+  tabs,
+  value,
+  onChange,
+}: {
+  idBase: string;
+  label: string;
+  tabs: readonly { id: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  function move(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const step =
+      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next = tabs[(index + step + tabs.length) % tabs.length]!;
+    onChange(next.id);
+    document.getElementById(`${idBase}-tab-${next.id}`)?.focus();
+  }
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      className="flex gap-1 border-b border-line px-6"
+    >
+      {tabs.map((tab, index) => {
+        const selected = tab.id === value;
+        return (
+          <button
+            key={tab.id}
+            id={`${idBase}-tab-${tab.id}`}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`${idBase}-panel-${tab.id}`}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(tab.id)}
+            onKeyDown={(event) => move(event, index)}
+            className={cn(
+              "focus-ring -mb-px h-12 cursor-pointer border-b-2 px-3 text-owner-body",
+              selected
+                ? "border-brand font-semibold text-ink"
+                : "border-transparent text-ink-muted hover:text-ink",
+            )}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function tabPanelProps(idBase: string, value: string) {
+  return {
+    id: `${idBase}-panel-${value}`,
+    role: "tabpanel",
+    "aria-labelledby": `${idBase}-tab-${value}`,
+    tabIndex: 0,
+  } as const;
+}
+
+// A small card with a label and a value (O-06 Harga jual / HPP / Margin).
+export function StatCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: "default" | "success" | "danger";
+}) {
+  return (
+    <div className="min-w-0 flex-1 rounded-card bg-accent-soft px-3 py-2.5">
+      <p className="text-caption text-ink-muted">{label}</p>
+      <p
+        className={cn(
+          "text-owner-body font-semibold",
+          tone === "success"
+            ? "text-success"
+            : tone === "danger"
+              ? "text-danger"
+              : "text-ink",
+        )}
+      >
+        {value}
+      </p>
     </div>
   );
 }

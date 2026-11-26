@@ -30,7 +30,7 @@ async function signIn(page: Page) {
 
 async function setPrice(page: Page, name: string, price: string) {
   await page.getByRole("button", { name: `Ubah ${name}` }).click();
-  const panel = page.getByRole("dialog", { name: "Ubah menu" });
+  const panel = page.getByRole("dialog", { name });
   await panel.getByLabel("Harga").fill(price);
   await panel.getByRole("button", { name: "Simpan" }).click();
   await expect(panel).toBeHidden();

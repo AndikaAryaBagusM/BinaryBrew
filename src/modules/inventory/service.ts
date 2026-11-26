@@ -1,4 +1,4 @@
-import { getDb } from "@/db/client";
+import { type DbExecutor, getDb } from "@/db/client";
 import { changedFields } from "@/lib/changes";
 import { AppError } from "@/lib/errors";
 import { unitCostFromTotal } from "@/lib/money";
@@ -194,6 +194,40 @@ export async function updateIngredient(
     );
     return { id, changed };
   });
+}
+
+// Recipes and modifier deltas (P2-02, menu module): checks the ingredients a
+// recipe or option names, inside the caller's transaction. Every id must
+// exist; ids in `newIds` (lines being added) must also be active, while a line
+// that already used a since-deactivated ingredient may stay. The rows are
+// share-locked, so the unit cannot change until the caller commits (lock
+// order: menu rows first, then ingredients).
+export async function useIngredients(
+  ids: readonly string[],
+  newIds: ReadonlySet<string>,
+  db: DbExecutor,
+): Promise<Map<string, { name: string; unit: IngredientUnit }>> {
+  const unique = [...new Set(ids)];
+  const rows = await repo.lockIngredientsForShare(
+    unique.filter((id) => UUID.test(id)),
+    db,
+  );
+  const found = new Map(rows.map((row) => [row.id, row]));
+  const invalid = unique.filter((id) => {
+    const row = found.get(id);
+    return !row || (newIds.has(id) && !row.isActive);
+  });
+  if (invalid.length > 0) {
+    throw new AppError("VALIDATION_FAILED", {
+      details: { reason: "unknown_ingredient", ingredientIds: invalid },
+    });
+  }
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { name: row.name, unit: row.unit as IngredientUnit },
+    ]),
+  );
 }
 
 export async function createSupplier(
