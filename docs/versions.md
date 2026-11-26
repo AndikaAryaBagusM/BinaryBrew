@@ -22,7 +22,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | `argon2`                 | 0.45.1  |
 | `drizzle-orm`            | 0.45.4  |
 | `lucide-react`           | 1.58.0  |
-| `next`                   | 16.4.2  |
+| `next`                   | 16.4.6  |
 | `pino`                   | 10.4.0  |
 | `postgres`               | 3.4.9   |
 | `qrcode`                 | 1.5.4   |
@@ -43,7 +43,7 @@ that states versions. `tests/unit/versions.test.ts` fails if the tables below dr
 | `@types/react-dom`       | 19.3.0  |
 | `drizzle-kit`            | 0.31.11 |
 | `eslint`                 | 9.39.5  |
-| `eslint-config-next`     | 16.4.2  |
+| `eslint-config-next`     | 16.4.6  |
 | `eslint-config-prettier` | 10.1.8  |
 | `husky`                  | 9.1.7   |
 | `lighthouse`             | 13.6.0  |
