@@ -1,4 +1,5 @@
 import { type DbExecutor, getDb } from "@/db/client";
+import { changedFields } from "@/lib/changes";
 import { AppError } from "@/lib/errors";
 import { audit, latestAuditByEntity } from "@/modules/audit/service";
 import {
@@ -429,20 +430,6 @@ export async function updateCategory(
     );
     return { id, changed };
   });
-}
-
-// The fields of a patch whose value differs from the current row.
-function changedFields<T extends Record<string, unknown>>(
-  current: T,
-  patch: Partial<T>,
-): Record<string, { from: unknown; to: unknown }> {
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-  for (const [key, to] of Object.entries(patch)) {
-    if (to !== undefined && current[key] !== to) {
-      changes[key] = { from: current[key], to };
-    }
-  }
-  return changes;
 }
 
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {

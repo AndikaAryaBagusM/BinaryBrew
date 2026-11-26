@@ -233,6 +233,11 @@ Built in Phase 1 (P1-13). Owner only; every change checks the origin, runs in on
 | `GET /api/owner/devices` | Owner | O-13: registered devices with kind, who registered them, last seen and revoked time. Registering uses `POST /api/devices/register`; revoking comes with P3-05. |
 | `GET /api/owner/settings` | Owner | O-14: all settings with their current values. |
 | `PUT /api/owner/settings` | Owner | Any subset of the O-14 basic keys (`shop_name`, `business_day_cutoff`, `ordering_enabled`, `tax_rate_bps`, `tax_inclusive`, `service_charge_bps`, `order_expiry_minutes`, `manual_payment_requires_owner_pin`, `ready_auto_complete_minutes`, `order_retention_months`, `low_margin_threshold_pct`); other keys are refused. All values are checked before any is written; one `setting.update` row per key that changed. Returns `{changed}`. |
+| `GET /api/owner/ingredients` | Owner | O-05: every ingredient, active or not (`kind`, `unit`, `stockQty`, `minStockQty`, `avgCost` as decimal strings, `unitLocked`), and every supplier. |
+| `POST /api/owner/ingredients` | Owner | Create an ingredient: `name` (1–60, unique ignoring case, else 409 `NAME_TAKEN`), `kind` (`raw`, `resale`), `unit` (`g`, `ml`, `pcs`), `minStockQty`, `isActive`, optional `opening` `{quantity > 0, totalCost}` (whole rupiah). With an opening, one `opening` movement is written in the same transaction and `avg_cost` = total ÷ quantity (docs/05 §5.5). 201. Audits `ingredient.create`. |
+| `PATCH /api/owner/ingredients/{id}` | Owner | Any subset of `name`, `kind`, `unit`, `minStockQty`, `isActive`; stock and cost never change here. The unit is locked once the ingredient has a stock movement or is used in a recipe or modifier (409 `UNIT_LOCKED`). Ingredients are never deleted. Returns `{id, changed}`; audits `ingredient.update` when something changed. |
+| `POST /api/owner/suppliers` | Owner | Create a supplier: `name` (1–60, unique ignoring case, else 409 `NAME_TAKEN`), optional `note` (≤ 200), `isActive`. 201. Audits `supplier.create`. |
+| `PATCH /api/owner/suppliers/{id}` | Owner | Any subset of those fields; suppliers are switched off, never deleted. 409 `NAME_TAKEN`. Audits `supplier.update`. |
 
 O-03 marks items sold out through `POST /api/counter/menu-items/{id}/sold-out` (the owner is a Counter role).
 
@@ -241,7 +246,7 @@ Later phases:
 | Area | Endpoints (all Owner unless noted) |
 |---|---|
 | Menu | CRUD `/api/owner/categories`, `/menu-items`, `/modifier-groups`, `/modifier-options`; `PUT /menu-items/{id}/recipe`; promote flag via menu item update |
-| Inventory | CRUD `/ingredients`, `/suppliers`; `POST /restocks` (Staff allowed); `POST /stock-counts` (Elev `stock_adjustment`) |
+| Inventory | `POST /restocks` (Staff allowed); `POST /stock-counts` (Elev `stock_adjustment`) |
 | Orders | `GET /orders`, `POST /orders/{id}/refund-processed` (Elev) |
 | Reports | `GET /reports/sales`, `/best-sellers`, `/peak-hours`, `/hpp`, `/stock-variance`, `/recommendations` |
 | System | `GET/PUT /settings`; users and devices CRUD; `POST /qr-tokens/{id}/rotate`; `GET /audit-logs`; `POST /reco/run` (Phase 3) |

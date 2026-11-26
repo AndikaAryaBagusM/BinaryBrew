@@ -168,3 +168,170 @@ export const qrLabels = [
   "Meja 5",
   "Meja 6",
 ] as const;
+
+// Phase 2 (Schema §7 step 4): suppliers and ingredients with opening stock.
+// Names and quantities follow the Figma O-05 table; base units only (g, ml,
+// pcs). The total is what the opening stock cost, so the average cost per
+// unit starts right (docs/05 §3.5). Quantities are well above the minimum
+// except Susu UHT, so the demo shows one "Menipis".
+export const supplierNames = [
+  "Roastery Kawan",
+  "Toko Susu Sejahtera",
+  "Bakery Pagi",
+] as const;
+
+type SeedIngredient = {
+  name: string;
+  kind: "raw" | "resale";
+  unit: "g" | "ml" | "pcs";
+  minStockQty: string;
+  openingQty: string;
+  openingTotalCost: number;
+};
+
+export const ingredients: readonly SeedIngredient[] = [
+  {
+    name: "Biji kopi arabika",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "1000",
+    openingQty: "3250",
+    openingTotalCost: 926_250,
+  },
+  {
+    name: "Susu UHT",
+    kind: "raw",
+    unit: "ml",
+    minStockQty: "2000",
+    openingQty: "1800",
+    openingTotalCost: 32_220,
+  },
+  {
+    name: "Oat milk",
+    kind: "raw",
+    unit: "ml",
+    minStockQty: "1000",
+    openingQty: "2400",
+    openingTotalCost: 91_200,
+  },
+  {
+    name: "Gula aren cair",
+    kind: "raw",
+    unit: "ml",
+    minStockQty: "500",
+    openingQty: "1500",
+    openingTotalCost: 67_500,
+  },
+  {
+    name: "Matcha bubuk",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "100",
+    openingQty: "500",
+    openingTotalCost: 450_000,
+  },
+  {
+    name: "Cokelat bubuk",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "300",
+    openingQty: "1000",
+    openingTotalCost: 120_000,
+  },
+  {
+    name: "Es krim vanila",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "500",
+    openingQty: "2000",
+    openingTotalCost: 120_000,
+  },
+  {
+    name: "Teh celup",
+    kind: "raw",
+    unit: "pcs",
+    minStockQty: "20",
+    openingQty: "100",
+    openingTotalCost: 70_000,
+  },
+  {
+    name: "Lemon",
+    kind: "raw",
+    unit: "pcs",
+    minStockQty: "10",
+    openingQty: "30",
+    openingTotalCost: 60_000,
+  },
+  {
+    name: "Es batu",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "5000",
+    openingQty: "18000",
+    openingTotalCost: 36_000,
+  },
+  {
+    name: "Cup + tutup",
+    kind: "raw",
+    unit: "pcs",
+    minStockQty: "50",
+    openingQty: "300",
+    openingTotalCost: 360_000,
+  },
+  {
+    name: "Sedotan kertas",
+    kind: "raw",
+    unit: "pcs",
+    minStockQty: "50",
+    openingQty: "300",
+    openingTotalCost: 45_000,
+  },
+  {
+    name: "Roti tawar",
+    kind: "raw",
+    unit: "pcs",
+    minStockQty: "10",
+    openingQty: "40",
+    openingTotalCost: 60_000,
+  },
+  {
+    name: "Mentega",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "250",
+    openingQty: "1000",
+    openingTotalCost: 100_000,
+  },
+  {
+    name: "Ayam fillet",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "1000",
+    openingQty: "3000",
+    openingTotalCost: 270_000,
+  },
+  {
+    name: "Kentang beku",
+    kind: "raw",
+    unit: "g",
+    minStockQty: "1000",
+    openingQty: "5000",
+    openingTotalCost: 200_000,
+  },
+  {
+    name: "Croissant Butter",
+    kind: "resale",
+    unit: "pcs",
+    minStockQty: "5",
+    openingQty: "20",
+    openingTotalCost: 220_000,
+  },
+  {
+    name: "Brownie",
+    kind: "resale",
+    unit: "pcs",
+    minStockQty: "5",
+    openingQty: "20",
+    openingTotalCost: 150_000,
+  },
+];

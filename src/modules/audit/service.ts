@@ -12,6 +12,8 @@ export const auditActions = [
   "category.update",
   "device.register",
   "elevation.grant",
+  "ingredient.create",
+  "ingredient.update",
   "menu_item.available",
   "menu_item.create",
   "menu_item.sold_out",
@@ -19,6 +21,8 @@ export const auditActions = [
   "payment.manual_confirm",
   "refund.request",
   "setting.update",
+  "supplier.create",
+  "supplier.update",
   "user.create",
   "user.pin_reset",
 ] as const;

@@ -4,7 +4,7 @@ import { closeSql, getDb } from "@/db/client";
 import { getEnv } from "@/lib/env";
 import { activeQrTokens, seedDatabase } from "./seed";
 
-// `npm run db:seed`: loads Schema §7 steps 1-3. Safe to run repeatedly.
+// `npm run db:seed`: loads Schema §7 steps 1-4. Safe to run repeatedly.
 // Secrets come from .env and are never printed.
 const pin = z.string().regex(/^\d{4,6}$/, "must be 4-6 digits");
 

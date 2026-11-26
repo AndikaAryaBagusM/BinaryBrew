@@ -1,6 +1,6 @@
 "use client";
 
-import { Coffee, LogOut, Settings, Users } from "lucide-react";
+import { Boxes, Coffee, LogOut, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 
 // Only the pages that exist are listed; the rest of the Figma nav (Dasbor,
-// Bahan & stok, laporan, …) arrives with their tasks.
+// Restock, laporan, …) arrives with their tasks.
 const sections: {
   label: MessageKey;
   links: { href: string; label: MessageKey; icon: typeof Coffee }[];
@@ -19,6 +19,16 @@ const sections: {
   {
     label: "owner.navSectionMenu",
     links: [{ href: "/owner/menu", label: "owner.navMenu", icon: Coffee }],
+  },
+  {
+    label: "owner.navSectionStock",
+    links: [
+      {
+        href: "/owner/ingredients",
+        label: "owner.navIngredients",
+        icon: Boxes,
+      },
+    ],
   },
   {
     label: "owner.navSectionOperations",
@@ -117,7 +127,7 @@ export function OwnerNav({ name }: { name: string }) {
       </header>
       <nav
         aria-label={t("owner.navLabel")}
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         {links.map(({ href, label, icon: Icon }) => (
           <Link

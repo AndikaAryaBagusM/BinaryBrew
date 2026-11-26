@@ -48,6 +48,8 @@ function messageFor(error: AppError): string {
       return t("error.orderStatusChanged");
     case "NAME_TAKEN":
       return t("error.nameTaken");
+    case "UNIT_LOCKED":
+      return t("error.unitLocked");
     default:
       return t("error.generic");
   }
