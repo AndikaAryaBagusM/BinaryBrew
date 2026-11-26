@@ -335,3 +335,96 @@ export const ingredients: readonly SeedIngredient[] = [
     openingTotalCost: 150_000,
   },
 ];
+
+type IngredientName = (typeof ingredients)[number]["name"];
+type MenuItemName = (typeof menuItems)[number]["name"];
+
+// Phase 2 (Schema §7 step 4, P2-02): one serving of each menu item, in the
+// ingredient's base unit. Kopi Susu Gula Aren follows the Figma O-06 frame.
+export const recipes: Record<
+  MenuItemName,
+  readonly (readonly [IngredientName, string])[]
+> = {
+  "Kopi Susu Gula Aren": [
+    ["Biji kopi arabika", "18"],
+    ["Susu UHT", "150"],
+    ["Gula aren cair", "20"],
+    ["Es batu", "120"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  Americano: [
+    ["Biji kopi arabika", "18"],
+    ["Es batu", "150"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  Latte: [
+    ["Biji kopi arabika", "18"],
+    ["Susu UHT", "200"],
+    ["Es batu", "100"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  Affogato: [
+    ["Biji kopi arabika", "18"],
+    ["Es krim vanila", "80"],
+    ["Cup + tutup", "1"],
+  ],
+  "Matcha Latte": [
+    ["Matcha bubuk", "5"],
+    ["Susu UHT", "200"],
+    ["Es batu", "100"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  "Es Teh Lemon": [
+    ["Teh celup", "1"],
+    ["Lemon", "0.25"],
+    ["Es batu", "150"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  "Es Cokelat": [
+    ["Cokelat bubuk", "25"],
+    ["Susu UHT", "150"],
+    ["Es batu", "120"],
+    ["Cup + tutup", "1"],
+    ["Sedotan kertas", "1"],
+  ],
+  "Sandwich Ayam": [
+    ["Roti tawar", "2"],
+    ["Ayam fillet", "100"],
+    ["Mentega", "10"],
+  ],
+  "Roti Bakar": [
+    ["Roti tawar", "2"],
+    ["Mentega", "15"],
+  ],
+  Croissant: [["Croissant Butter", "1"]],
+  Brownie: [["Brownie", "1"]],
+  "Kentang Goreng": [["Kentang beku", "150"]],
+};
+
+// What an option adds to or takes from the recipe, per serving (Schema
+// §3.3). Sugar and ice choices do not change stock (D9).
+export const optionDeltas: readonly {
+  group: ModifierGroupName;
+  option: string;
+  deltas: readonly (readonly [IngredientName, string])[];
+}[] = [
+  { group: "Ukuran", option: "Large", deltas: [["Es batu", "50"]] },
+  {
+    group: "Tambahan",
+    option: "Extra shot",
+    deltas: [["Biji kopi arabika", "9"]],
+  },
+  {
+    group: "Tambahan",
+    option: "Susu oat",
+    deltas: [
+      ["Oat milk", "150"],
+      ["Susu UHT", "-150"],
+    ],
+  },
+];

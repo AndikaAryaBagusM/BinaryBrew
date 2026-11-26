@@ -274,9 +274,9 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 | O-01 | Centred card: email, password, "Masuk". Rate-limit message on repeated failures. |
 | O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
 | O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column and no stock-based statuses yet; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
-| O-04 | Group list with options; per option: name, price delta, ingredient deltas (Phase 2). |
+| O-04 | `/owner/modifiers` "Pilihan menu" (P2-02): group cards on the left (rule "Wajib · pilih 1" / "Opsional · maks 2", "dipakai di N menu", a "Tidak mengubah stok" tag when no option has deltas); the chosen group on the right with name, "Aktif" switch, "Minimal pilih" / "Maksimal pilih", an options table (Opsi / Tambahan harga / Pengaruh ke stok (per porsi) / Aktif), "Tambah opsi" opening a side panel with ingredient delta rows (minus = uses less), and read-only "Dipakai di menu" chips. Groups and options are switched off, never deleted. |
 | O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
-| O-06 | Ingredient rows with quantity; live HPP and margin preview; warning if an ingredient has no cost yet. |
+| O-06 | The O-03 edit panel, titled with the item name, gets tabs Detail / Resep / Pilihan (P2-02). Resep: cards Harga jual / HPP / Margin (green, red when negative), a table Bahan / Jumlah / Biaya/unit / Biaya with a delete button per line, "Tambah bahan", a blue row and notice for an ingredient with no cost yet (counted as 0), and "Simpan resep". HPP and margin are computed live from the current average costs (`src/lib/money.ts`). Pilihan: tick and order the groups the item offers; "Simpan pilihan". A new item gets these tabs after it is saved. |
 | O-07 | Multi-row entry: ingredient, quantity, total price, supplier, date; shows the new average cost per row before saving. |
 | O-08 | One row per ingredient with system quantity, counted quantity input, difference, reason selector (required when different). Owner PIN on save. |
 | O-09 | Table: item, price, HPP, margin, margin %, flag for low margin; items without a recipe show "Resep belum ada". |
@@ -392,6 +392,9 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.orderStatusChanged` | Status pesanan sudah berubah. Daftar diperbarui. |
 | `error.nameTaken` | Nama ini sudah dipakai. Pilih nama lain. |
 | `error.unitLocked` | Satuan tidak bisa diubah: bahan ini sudah punya riwayat stok atau dipakai di resep. |
+| `error.priceNegative` | Harga jadi minus untuk: {items}. Naikkan harga menu atau kurangi potongan opsi. |
+| `error.tooManyDefaults` | Opsi default lebih banyak dari batas maksimal pilih grup ini. |
+| `error.tooFewOptions` | Grup wajib ini butuh opsi aktif sebanyak minimal pilih, karena sudah dipakai di menu. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
@@ -550,7 +553,6 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.menuEmpty` | Tidak ada menu yang cocok. |
 | `owner.addItem` | Tambah menu |
 | `owner.editItem` | Ubah {name} |
-| `owner.editItemTitle` | Ubah menu |
 | `owner.colItem` | Menu |
 | `owner.colCategory` | Kategori |
 | `owner.colPrice` | Harga |
@@ -628,6 +630,71 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.supplierActive` | Pemasok {name} aktif |
 | `owner.newSupplier` | Pemasok baru |
 | `owner.addSupplier` | Tambah pemasok |
+| `owner.navModifiers` | Pilihan menu |
+| `owner.itemTabsLabel` | Bagian menu |
+| `owner.tabDetail` | Detail |
+| `owner.tabRecipe` | Resep |
+| `owner.tabGroups` | Pilihan |
+| `owner.sellingPrice` | Harga jual |
+| `owner.hpp` | HPP |
+| `owner.margin` | Margin |
+| `owner.colQuantity` | Jumlah |
+| `owner.colUnitCost` | Biaya/unit |
+| `owner.colCost` | Biaya |
+| `owner.recipeEmpty` | Belum ada resep. Tambahkan bahan untuk satu porsi. |
+| `owner.quantityOf` | Jumlah {name} |
+| `owner.removeIngredient` | Hapus {name} dari resep |
+| `owner.addIngredientToRecipe` | Tambah bahan |
+| `owner.pickIngredient` | Pilih bahan |
+| `owner.addLine` | Tambah |
+| `owner.noCostTitle` | {name} belum punya biaya |
+| `owner.noCostBody` | HPP dihitung tanpa bahan ini sampai ada restock dengan harga. Margin mungkin sedikit lebih rendah. |
+| `owner.saveRecipe` | Simpan resep |
+| `owner.recipeSaved` | Resep tersimpan. |
+| `owner.groupsHelp` | Centang grup pilihan yang ditawarkan menu ini. Urutannya sama dengan yang dilihat pelanggan. |
+| `owner.moveUp` | Naikkan {name} |
+| `owner.moveDown` | Turunkan {name} |
+| `owner.saveGroups` | Simpan pilihan |
+| `owner.groupsSaved` | Pilihan tersimpan. |
+| `owner.modifiersTitle` | Pilihan menu |
+| `owner.modifiersSubtitle` | Ukuran, gula, es dan tambahan yang bisa dipilih pelanggan |
+| `owner.addGroup` | Tambah grup |
+| `owner.groupsEmpty` | Belum ada grup pilihan. |
+| `owner.groupRequired` | Wajib · pilih {n} |
+| `owner.groupRequiredRange` | Wajib · pilih {min}–{max} |
+| `owner.groupOptional` | Opsional · maks {n} |
+| `owner.groupUsedIn` | dipakai di {n} menu |
+| `owner.noStockEffect` | Tidak mengubah stok |
+| `owner.groupName` | Nama grup |
+| `owner.groupActive` | Grup {name} aktif |
+| `owner.groupLimitsHelp` | Minimal 1 berarti pelanggan wajib memilih. |
+| `owner.minSelect` | Minimal pilih |
+| `owner.minSelectHelp` | 0 = opsional, 1 atau lebih = wajib |
+| `owner.maxSelect` | Maksimal pilih |
+| `owner.countInvalid` | Isi angka 0–10 |
+| `owner.minAboveMax` | Minimal tidak boleh lebih dari maksimal |
+| `owner.optionsOf` | Opsi {name} |
+| `owner.colOption` | Opsi |
+| `owner.colPriceDelta` | Tambahan harga |
+| `owner.colStockEffect` | Pengaruh ke stok (per porsi) |
+| `owner.optionsEmpty` | Belum ada opsi. |
+| `owner.optionDefault` | Default |
+| `owner.optionActive` | Opsi {name} aktif |
+| `owner.addOption` | Tambah opsi |
+| `owner.editOptionTitle` | Ubah opsi |
+| `owner.optionName` | Nama opsi |
+| `owner.priceDeltaHelp` | Tulis minus untuk potongan, misalnya -2.000. 0 = gratis. |
+| `owner.priceDeltaInvalid` | Tulis harga dalam rupiah, misalnya 5.000 atau -2.000 |
+| `owner.optionDefaultHelp` | Sudah terpilih saat pelanggan membuka menu. |
+| `owner.optionDefaultSingleHelp` | Sudah terpilih saat pelanggan membuka menu. Grup ini hanya punya satu default. |
+| `owner.optionActiveLabel` | Opsi aktif |
+| `owner.optionActiveHelp` | Opsi nonaktif tidak ditawarkan ke pelanggan dan kasir. |
+| `owner.deltaHelp` | Tambahan atau pengurangan bahan per porsi, dalam satuan bahan. Tulis minus untuk bahan yang berkurang. |
+| `owner.deltaInvalid` | Tulis angka selain 0, misalnya 9 atau -150 |
+| `owner.addDelta` | Tambah bahan |
+| `owner.removeDelta` | Hapus bahan ini |
+| `owner.usedInMenu` | Dipakai di menu |
+| `owner.notUsedInMenu` | Belum dipakai. Pasang grup ini di tab Pilihan pada halaman Menu. |
 | `owner.newCategory` | Kategori baru |
 | `owner.addCategory` | Tambah |
 | `owner.usersTitle` | Pengguna & perangkat |

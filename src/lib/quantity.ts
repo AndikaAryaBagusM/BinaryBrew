@@ -64,3 +64,17 @@ export function parseQuantityInput(text: string): number | null {
 export function quantityInputText(milli: number): string {
   return formatQuantity(milli).replace("−", "-");
 }
+
+// O-04 ingredient delta field: like parseQuantityInput, with an optional
+// leading "-" or "−" for an option that uses less ("-150" → -150000).
+export function parseSignedQuantityInput(text: string): number | null {
+  const match = /^\s*([-−]?)\s*(.*)$/.exec(text)!;
+  const milli = parseQuantityInput(match[2]!);
+  if (milli === null) return null;
+  return match[1] && milli !== 0 ? -milli : milli;
+}
+
+// O-04 "Pengaruh ke stok": 9000 → "+9", -150000 → "−150".
+export function formatQuantityDelta(milli: number): string {
+  return milli > 0 ? `+${formatQuantity(milli)}` : formatQuantity(milli);
+}

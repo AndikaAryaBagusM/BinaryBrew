@@ -87,6 +87,15 @@ export function parseRupiahInput(text: string): number | null {
   return /^\d{1,9}$/.test(digits) ? Number(digits) : null;
 }
 
+// O-04 option price change: "5.000", "-2.000" or "−2.000" (true minus) →
+// 5000 or -2000; null if it is not a whole number of rupiah.
+export function parsePriceDeltaInput(text: string): number | null {
+  const match = /^\s*([-−]?)\s*(.*)$/.exec(text)!;
+  const amount = parseRupiahInput(match[2]!);
+  if (amount === null) return null;
+  return match[1] && amount !== 0 ? -amount : amount;
+}
+
 // O-14 rate fields, in percent with up to two decimals ("11", "11,5" or
 // "11.25") ↔ basis points; null outside 0–100 %.
 export function percentToBps(text: string): number | null {
@@ -158,4 +167,60 @@ export function formatUnitCost(cost: string): string {
   const fraction = Number(cents % big(100)) / 100;
   const text = costDigits.format(Number(whole) + fraction);
   return `Rp ${text}`;
+}
+
+function costScaled(cost: string): bigint {
+  const match = COST_DECIMAL.exec(cost.trim());
+  if (!match) throw new RangeError(`not a cost: "${cost}"`);
+  return (
+    BigInt(match[1]!) * COST_SCALE + BigInt((match[2] ?? "").padEnd(4, "0"))
+  );
+}
+
+// quantity (thousandths of a unit) × cost per unit (ten-thousandths of a
+// rupiah), rounded half-up to whole rupiah. Exact: BigInt throughout.
+const LINE_SCALE = BigInt(1000) * COST_SCALE;
+
+function roundScaled(value: bigint): number {
+  let rupiah = value / LINE_SCALE;
+  if ((value % LINE_SCALE) * big(2) >= LINE_SCALE) rupiah += big(1);
+  return Number(rupiah);
+}
+
+export type CostLine = { quantityMilli: number; avgCost: string };
+
+function lineScaled({ quantityMilli, avgCost }: CostLine): bigint {
+  if (!Number.isSafeInteger(quantityMilli) || quantityMilli < 0) {
+    throw new RangeError(`quantity must be a non-negative safe integer`);
+  }
+  return BigInt(quantityMilli) * costScaled(avgCost);
+}
+
+// O-06 "Biaya" column: 18 g at Rp 285,0000 → 5130.
+export function lineCost(line: CostLine): number {
+  return roundScaled(lineScaled(line));
+}
+
+// O-06 HPP preview: the exact sum of quantity × average cost over the recipe,
+// rounded half-up to whole rupiah once (so it can differ by a rupiah from the
+// sum of the rounded line costs). Schema §3.8 v_menu_item_cost does the same
+// sum in SQL.
+export function recipeCost(lines: readonly CostLine[]): number {
+  return roundScaled(
+    lines.reduce((sum, line) => sum + lineScaled(line), big(0)),
+  );
+}
+
+// O-06 margin: "Rp 11.836 · 53,8%". The percentage is of the selling price,
+// half-up to one decimal (away from zero for a loss); null when the price is 0.
+export function formatMargin(price: number, hpp: number): string {
+  assertAmount(price, "price");
+  assertAmount(hpp, "hpp");
+  const margin = price - hpp;
+  const amount =
+    margin < 0 ? `−${formatRupiah(-margin)}` : formatRupiah(margin);
+  if (price === 0) return amount;
+  const permille = divideRoundHalfUp(Math.abs(margin) * 1000, price);
+  const text = `${Math.floor(permille / 10)},${permille % 10}%`;
+  return `${amount} · ${margin < 0 ? "−" : ""}${text}`;
 }

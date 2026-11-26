@@ -1,14 +1,23 @@
 import { type DbExecutor, getDb } from "@/db/client";
 import { changedFields } from "@/lib/changes";
 import { AppError } from "@/lib/errors";
+import { fromMilli, toMilli } from "@/lib/quantity";
 import { audit, latestAuditByEntity } from "@/modules/audit/service";
 import {
   COUNTER_ROLES,
   requireRole,
   type SessionUser,
 } from "@/modules/auth/service";
-import type { PricingItem, PricingRates } from "@/modules/orders/pricing";
+import { useIngredients } from "@/modules/inventory/service";
+import {
+  cheapestUnitPrice,
+  type PricingGroup,
+  type PricingItem,
+  type PricingOption,
+  type PricingRates,
+} from "@/modules/orders/pricing";
 import { getSettings } from "@/modules/settings/service";
+import * as admin from "./admin-repo";
 import * as repo from "./repo";
 
 // Public menu for a table or entrance QR code (FR-CO-01, FR-CO-02, FR-CO-07).
@@ -333,6 +342,8 @@ export async function updateMenuItem(
   const owner = requireRole(actor, ["owner"]);
   if (!UUID.test(id)) throw new AppError("NOT_FOUND");
   return getDb().transaction(async (tx) => {
+    // A lower price can make an option mix negative (PRICE_NEGATIVE).
+    if (patch.price !== undefined) await admin.lockPrices(tx);
     const item = await repo.lockItem(id, tx);
     if (!item) throw new AppError("NOT_FOUND");
     if (
@@ -353,6 +364,7 @@ export async function updateMenuItem(
       now,
       tx,
     );
+    if (changes.price) await assertCheapestPrices([id], tx);
     await audit(
       {
         action: "menu_item.update",
@@ -432,6 +444,527 @@ export async function updateCategory(
   });
 }
 
+// ---- O-06 recipe and options tab, O-04 modifier groups (P2-02) -------------
+//
+// FR-IV-02, FR-OW-03. Recipes and option ingredient deltas are in the
+// ingredient's base unit (g, ml, pcs) as decimal strings, like the stock
+// columns. Groups and options are never deleted (order snapshots keep their
+// names; "Nonaktif" hides them). Lock order: the price lock, then menu items,
+// groups, options, and last ingredients (inventory's useIngredients).
+
+export type RecipeLine = { ingredientId: string; qty: string };
+export type IngredientDelta = { ingredientId: string; qtyDelta: string };
+
+export type OwnerItemDetails = {
+  id: string;
+  recipe: RecipeLine[];
+  // The groups the item offers, active or not, in its order.
+  groupIds: string[];
+};
+
+// "18" and "18.000" are the same quantity; compare and store one form.
+const normalizedQty = (quantity: string) => fromMilli(toMilli(quantity));
+
+function sameRows<T>(
+  a: readonly T[],
+  b: readonly T[],
+  key: (row: T) => string,
+) {
+  return (
+    a.length === b.length &&
+    a.every((row, index) => key(row) === key(b[index]!))
+  );
+}
+
+const byIngredient = (
+  a: { ingredientId: string },
+  b: { ingredientId: string },
+) =>
+  a.ingredientId < b.ingredientId
+    ? -1
+    : a.ingredientId > b.ingredientId
+      ? 1
+      : 0;
+
+export async function getOwnerItemDetails(
+  actor: SessionUser | null,
+  id: string,
+): Promise<OwnerItemDetails> {
+  requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(
+    async (tx) => {
+      const [item] = await admin.selectItemPrices([id], tx);
+      if (!item) throw new AppError("NOT_FOUND");
+      const [recipe, groupIds] = await Promise.all([
+        admin.selectRecipe(id, tx),
+        admin.selectItemGroupIds(id, tx),
+      ]);
+      return { id, recipe, groupIds };
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+// "Simpan resep": replaces the whole recipe. An empty recipe means "no
+// recipe" (HPP unknown, not zero; Schema §3.8). New lines need an active
+// ingredient; a line whose ingredient was switched off since may stay.
+export async function setRecipe(
+  actor: SessionUser | null,
+  id: string,
+  lines: readonly RecipeLine[],
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: boolean }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  const next = lines
+    .map((line) => ({
+      ingredientId: line.ingredientId,
+      qty: normalizedQty(line.qty),
+    }))
+    .sort(byIngredient);
+  return getDb().transaction(async (tx) => {
+    const item = await repo.lockItem(id, tx);
+    if (!item) throw new AppError("NOT_FOUND");
+    const current = (await admin.selectRecipe(id, tx)).map((line) => ({
+      ingredientId: line.ingredientId,
+      qty: normalizedQty(line.qty),
+    }));
+    const had = new Set(current.map((line) => line.ingredientId));
+    await useIngredients(
+      next.map((line) => line.ingredientId),
+      new Set(next.map((l) => l.ingredientId).filter((i) => !had.has(i))),
+      tx,
+    );
+    const key = (line: RecipeLine) => `${line.ingredientId}:${line.qty}`;
+    if (sameRows(current, next, key)) return { id, changed: false };
+    await admin.replaceRecipe(id, next, tx);
+    await audit(
+      {
+        action: "recipe.update",
+        actor: owner,
+        entity: { type: "menu_item", id },
+        metadata: { name: item.name, from: current, to: next },
+      },
+      { db: tx, now },
+    );
+    return { id, changed: true };
+  });
+}
+
+// "Pilihan" tab: the groups the item offers, in order.
+export async function setItemGroups(
+  actor: SessionUser | null,
+  id: string,
+  groupIds: readonly string[],
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: boolean }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(async (tx) => {
+    await admin.lockPrices(tx);
+    const item = await repo.lockItem(id, tx);
+    if (!item) throw new AppError("NOT_FOUND");
+    const groups = await admin.lockGroupsForShare([...groupIds], tx);
+    if (groups.length !== groupIds.length) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { reason: "unknown_group" },
+      });
+    }
+    const current = await admin.selectItemGroupIds(id, tx);
+    if (sameRows(current, groupIds, (groupId) => groupId)) {
+      return { id, changed: false };
+    }
+    await admin.replaceItemGroups(id, [...groupIds], tx);
+    for (const groupId of groupIds) await assertGroupRules(groupId, tx);
+    await assertCheapestPrices([id], tx);
+    const names = new Map(
+      (await admin.selectAllGroups(tx)).map((g) => [g.id, g.name]),
+    );
+    await audit(
+      {
+        action: "menu_item.groups_update",
+        actor: owner,
+        entity: { type: "menu_item", id },
+        metadata: {
+          name: item.name,
+          from: current.map((groupId) => names.get(groupId)),
+          to: groupIds.map((groupId) => names.get(groupId)),
+        },
+      },
+      { db: tx, now },
+    );
+    return { id, changed: true };
+  });
+}
+
+export type OwnerModifierOption = {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isDefault: boolean;
+  isActive: boolean;
+  ingredientDeltas: IngredientDelta[];
+};
+
+export type OwnerModifierGroup = {
+  id: string;
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  isActive: boolean;
+  options: OwnerModifierOption[];
+  // "Dipakai di menu", in menu order.
+  items: { id: string; name: string }[];
+};
+
+export async function getOwnerModifierGroups(
+  actor: SessionUser | null,
+): Promise<{ groups: OwnerModifierGroup[] }> {
+  requireRole(actor, ["owner"]);
+  return getDb().transaction(
+    async (tx) => {
+      const [groups, options, deltas, links] = await Promise.all([
+        admin.selectAllGroups(tx),
+        admin.selectAllOptions(tx),
+        admin.selectOptionDeltas(null, tx),
+        admin.selectAllLinks(tx),
+      ]);
+      const optionsByGroup = groupBy(options, (option) => option.groupId);
+      const deltasByOption = groupBy(deltas, (delta) => delta.optionId);
+      const linksByGroup = groupBy(links, (link) => link.groupId);
+      return {
+        groups: groups.map((group) => ({
+          ...group,
+          options: (optionsByGroup.get(group.id) ?? []).map((option) => ({
+            id: option.id,
+            name: option.name,
+            priceDelta: option.priceDelta,
+            isDefault: option.isDefault,
+            isActive: option.isActive,
+            ingredientDeltas: (deltasByOption.get(option.id) ?? []).map(
+              ({ ingredientId, qtyDelta }) => ({ ingredientId, qtyDelta }),
+            ),
+          })),
+          items: (linksByGroup.get(group.id) ?? []).map((link) => ({
+            id: link.menuItemId,
+            name: link.name,
+          })),
+        })),
+      };
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+}
+
+export type ModifierGroupInput = {
+  name: string;
+  minSelect: number;
+  maxSelect: number;
+  isActive: boolean;
+};
+
+export async function createModifierGroup(
+  actor: SessionUser | null,
+  input: ModifierGroupInput,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (input.minSelect > input.maxSelect) {
+    throw new AppError("VALIDATION_FAILED", {
+      details: { fields: ["minSelect"] },
+    });
+  }
+  return getDb().transaction(async (tx) => {
+    await admin.lockGroupNames(tx);
+    if (await admin.findGroupByName(input.name, null, tx)) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const group = await admin.insertGroup(input, tx);
+    await audit(
+      {
+        action: "modifier_group.create",
+        actor: owner,
+        entity: { type: "modifier_group", id: group.id },
+        metadata: { ...input },
+      },
+      { db: tx, now },
+    );
+    return group;
+  });
+}
+
+export async function updateModifierGroup(
+  actor: SessionUser | null,
+  id: string,
+  patch: Partial<ModifierGroupInput>,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: string[] }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  return getDb().transaction(async (tx) => {
+    await admin.lockPrices(tx);
+    if (patch.name !== undefined) await admin.lockGroupNames(tx);
+    const group = await admin.lockGroup(id, tx);
+    if (!group) throw new AppError("NOT_FOUND");
+    if (
+      patch.name !== undefined &&
+      (await admin.findGroupByName(patch.name, id, tx))
+    ) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const current = {
+      name: group.name,
+      minSelect: group.minSelect,
+      maxSelect: group.maxSelect,
+      isActive: group.isActive,
+    };
+    if (
+      (patch.minSelect ?? current.minSelect) >
+      (patch.maxSelect ?? current.maxSelect)
+    ) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { fields: ["minSelect"] },
+      });
+    }
+    const changes = changedFields(current, patch);
+    const changed = Object.keys(changes);
+    if (changed.length === 0) return { id, changed };
+    await admin.updateGroup(
+      id,
+      Object.fromEntries(changed.map((key) => [key, changes[key]!.to])),
+      tx,
+    );
+    await assertGroupRules(id, tx);
+    await assertCheapestPrices(await admin.selectItemIdsUsingGroup(id, tx), tx);
+    await audit(
+      {
+        action: "modifier_group.update",
+        actor: owner,
+        entity: { type: "modifier_group", id },
+        metadata: { name: group.name, changes },
+      },
+      { db: tx, now },
+    );
+    return { id, changed };
+  });
+}
+
+export type ModifierOptionInput = {
+  name: string;
+  priceDelta: number;
+  isDefault: boolean;
+  isActive: boolean;
+  ingredientDeltas: IngredientDelta[];
+};
+
+function normalizedDeltas(deltas: readonly IngredientDelta[]) {
+  return deltas
+    .map((delta) => ({
+      ingredientId: delta.ingredientId,
+      qtyDelta: normalizedQty(delta.qtyDelta),
+    }))
+    .sort(byIngredient);
+}
+
+export async function createModifierOption(
+  actor: SessionUser | null,
+  groupId: string,
+  input: ModifierOptionInput,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(groupId)) throw new AppError("NOT_FOUND");
+  const deltas = normalizedDeltas(input.ingredientDeltas);
+  return getDb().transaction(async (tx) => {
+    await admin.lockPrices(tx);
+    // The group lock also serialises option names within the group.
+    const group = await admin.lockGroup(groupId, tx);
+    if (!group) throw new AppError("NOT_FOUND");
+    if (await admin.findOptionByName(groupId, input.name, null, tx)) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const option = await admin.insertOption(
+      {
+        groupId,
+        name: input.name,
+        priceDelta: input.priceDelta,
+        isDefault: input.isDefault,
+        isActive: input.isActive,
+      },
+      tx,
+    );
+    const ids = deltas.map((delta) => delta.ingredientId);
+    await useIngredients(ids, new Set(ids), tx);
+    await admin.replaceOptionDeltas(option.id, deltas, tx);
+    const clearedDefaults =
+      input.isDefault && group.maxSelect === 1
+        ? await admin.clearOtherDefaults(groupId, option.id, tx)
+        : [];
+    await assertGroupRules(groupId, tx);
+    await assertCheapestPrices(
+      await admin.selectItemIdsUsingGroup(groupId, tx),
+      tx,
+    );
+    await audit(
+      {
+        action: "modifier_option.create",
+        actor: owner,
+        entity: { type: "modifier_option", id: option.id },
+        metadata: {
+          group: group.name,
+          ...input,
+          ingredientDeltas: deltas,
+          clearedDefaults,
+        },
+      },
+      { db: tx, now },
+    );
+    return option;
+  });
+}
+
+export async function updateModifierOption(
+  actor: SessionUser | null,
+  id: string,
+  patch: Partial<ModifierOptionInput>,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ id: string; changed: string[] }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(id)) throw new AppError("NOT_FOUND");
+  const { ingredientDeltas, ...fields } = patch;
+  return getDb().transaction(async (tx) => {
+    await admin.lockPrices(tx);
+    const groupId = await admin.selectOptionGroupId(id, tx);
+    if (!groupId) throw new AppError("NOT_FOUND");
+    const group = await admin.lockGroup(groupId, tx);
+    const option = await admin.lockOption(id, tx);
+    if (!group || !option) throw new AppError("NOT_FOUND");
+    if (
+      fields.name !== undefined &&
+      (await admin.findOptionByName(groupId, fields.name, id, tx))
+    ) {
+      throw new AppError("NAME_TAKEN", { details: { fields: ["name"] } });
+    }
+    const current = {
+      name: option.name,
+      priceDelta: option.priceDelta,
+      isDefault: option.isDefault,
+      isActive: option.isActive,
+    };
+    const changes: Record<string, { from: unknown; to: unknown }> =
+      changedFields(current, fields);
+
+    let nextDeltas: IngredientDelta[] | null = null;
+    if (ingredientDeltas !== undefined) {
+      const before = normalizedDeltas(await admin.selectOptionDeltas([id], tx));
+      const after = normalizedDeltas(ingredientDeltas);
+      const had = new Set(before.map((delta) => delta.ingredientId));
+      await useIngredients(
+        after.map((delta) => delta.ingredientId),
+        new Set(after.map((d) => d.ingredientId).filter((i) => !had.has(i))),
+        tx,
+      );
+      const key = (delta: IngredientDelta) =>
+        `${delta.ingredientId}:${delta.qtyDelta}`;
+      if (!sameRows(before, after, key)) {
+        changes.ingredientDeltas = { from: before, to: after };
+        nextDeltas = after;
+      }
+    }
+    const changed = Object.keys(changes);
+    if (changed.length === 0) return { id, changed };
+
+    const values = Object.fromEntries(
+      changed
+        .filter((key) => key !== "ingredientDeltas")
+        .map((key) => [key, changes[key]!.to]),
+    );
+    if (Object.keys(values).length > 0) {
+      await admin.updateOption(id, values, tx);
+    }
+    if (nextDeltas) await admin.replaceOptionDeltas(id, nextDeltas, tx);
+    const clearedDefaults =
+      changes.isDefault?.to === true && group.maxSelect === 1
+        ? await admin.clearOtherDefaults(groupId, id, tx)
+        : [];
+    await assertGroupRules(groupId, tx);
+    await assertCheapestPrices(
+      await admin.selectItemIdsUsingGroup(groupId, tx),
+      tx,
+    );
+    await audit(
+      {
+        action: "modifier_option.update",
+        actor: owner,
+        entity: { type: "modifier_option", id },
+        metadata: {
+          name: option.name,
+          group: group.name,
+          changes,
+          clearedDefaults,
+        },
+      },
+      { db: tx, now },
+    );
+    return { id, changed };
+  });
+}
+
+// Read after the write, inside the same transaction, so a refusal rolls it
+// back. A group may not have more active defaults than it allows; an active
+// group that some item offers needs at least `minSelect` active options, or
+// that item could not be ordered at all.
+async function assertGroupRules(groupId: string, db: DbExecutor) {
+  const state = await admin.selectGroupRuleState(groupId, db);
+  if (!state) return;
+  if (state.active_defaults > state.max_select) {
+    throw new AppError("MODIFIER_RULE", {
+      details: { reason: "too_many_defaults", groupId },
+    });
+  }
+  if (
+    state.is_active &&
+    state.linked &&
+    state.active_options < state.min_select
+  ) {
+    throw new AppError("MODIFIER_RULE", {
+      details: { reason: "too_few_options", groupId },
+    });
+  }
+}
+
+// No item may reach a negative unit price with any valid option choice
+// (cheapestUnitPrice). Checked after the write, for every item it touches;
+// the caller holds the price lock.
+async function assertCheapestPrices(itemIds: string[], db: DbExecutor) {
+  if (itemIds.length === 0) return;
+  const items = await admin.selectItemPrices(itemIds, db);
+  const links = await repo.selectItemGroups(itemIds, db);
+  const options = await repo.selectActiveOptions(
+    [...new Set(links.map((link) => link.id))],
+    db,
+  );
+  const optionsByGroup = groupBy(options, (option) => option.groupId);
+  const linksByItem = groupBy(links, (link) => link.menuItemId);
+  const negative = items
+    .filter(
+      (item) =>
+        cheapestUnitPrice({
+          price: item.price,
+          modifierGroups: (linksByItem.get(item.id) ?? []).map((group) => ({
+            minSelect: group.minSelect,
+            maxSelect: group.maxSelect,
+            options: optionsByGroup.get(group.id) ?? [],
+          })),
+        }) < 0,
+    )
+    .map((item) => item.name);
+  if (negative.length > 0) {
+    throw new AppError("PRICE_NEGATIVE", { details: { items: negative } });
+  }
+}
+
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const row of rows) {
@@ -457,7 +990,17 @@ export async function requireOrderingQr(
   return { qrTokenId: qr.id };
 }
 
-export type OrderableItem = PricingItem & { isAvailable: boolean };
+export type OrderableItem = Omit<PricingItem, "modifierGroups"> & {
+  isAvailable: boolean;
+  modifierGroups: (Omit<PricingGroup, "options"> & {
+    options: (PricingOption & {
+      // What the option adds to or takes from the recipe, per unit. Copied
+      // into order_item_modifiers.ingredient_deltas (P2-02), so the stock
+      // deduction at payment (P2-04) uses what was true at order time.
+      ingredientDeltas: IngredientDelta[];
+    })[];
+  })[];
+};
 
 // Checkout (Schema §5.1 steps 3-4): current prices, active modifier groups and
 // availability for the requested items, read inside the caller's transaction.
@@ -476,6 +1019,18 @@ export async function getOrderableItems(
     [...new Set(links.map((link) => link.id))],
     db,
   );
+  const ingredientDeltas = new Map<string, IngredientDelta[]>();
+  for (const row of await admin.selectOptionDeltas(
+    options.map((option) => option.id),
+    db,
+  )) {
+    const list = ingredientDeltas.get(row.optionId) ?? [];
+    list.push({
+      ingredientId: row.ingredientId,
+      qtyDelta: normalizedQty(row.qtyDelta),
+    });
+    ingredientDeltas.set(row.optionId, list);
+  }
   return items.map((item) => ({
     id: item.id,
     name: item.name,
@@ -490,7 +1045,12 @@ export async function getOrderableItems(
         maxSelect: group.maxSelect,
         options: options
           .filter((option) => option.groupId === group.id)
-          .map(({ id, name, priceDelta }) => ({ id, name, priceDelta })),
+          .map(({ id, name, priceDelta }) => ({
+            id,
+            name,
+            priceDelta,
+            ingredientDeltas: ingredientDeltas.get(id) ?? [],
+          })),
       })),
   }));
 }

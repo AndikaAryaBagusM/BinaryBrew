@@ -257,7 +257,15 @@ async function insertOrder(
       })),
       tx,
     );
-    // ingredient_deltas stays [] until recipes exist (Phase 2).
+    // Each option's ingredient deltas per unit, as they are now (Schema
+    // §3.6): the stock deduction at payment (P2-04) reads this snapshot.
+    const deltas = new Map(
+      items.flatMap((item) =>
+        item.modifierGroups.flatMap((group) =>
+          group.options.map((option) => [option.id, option.ingredientDeltas]),
+        ),
+      ),
+    );
     await repo.insertOrderItemModifiers(
       lines.flatMap((line) =>
         line.modifiers.map((modifier, position) => ({
@@ -267,6 +275,7 @@ async function insertOrder(
           groupNameSnapshot: modifier.groupName,
           optionNameSnapshot: modifier.optionName,
           priceDeltaSnapshot: modifier.priceDelta,
+          ingredientDeltas: deltas.get(modifier.optionId) ?? [],
         })),
       ),
       tx,

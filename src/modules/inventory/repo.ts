@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
 import { ingredients, stockMovements, suppliers } from "@/db/schema";
 
@@ -112,6 +112,23 @@ export async function lockIngredient(id: string, db: DbExecutor) {
     .where(eq(ingredients.id, id))
     .for("update", { of: ingredients });
   return row;
+}
+
+// Recipes and modifier deltas (P2-02): the ingredients they name, share-locked
+// in id order so a unit change (lockIngredient, for update) cannot slip past.
+export function lockIngredientsForShare(ids: string[], db: DbExecutor) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: ingredients.id,
+      name: ingredients.name,
+      unit: ingredients.unit,
+      isActive: ingredients.isActive,
+    })
+    .from(ingredients)
+    .where(inArray(ingredients.id, ids))
+    .orderBy(asc(ingredients.id))
+    .for("share");
 }
 
 export async function updateIngredient(

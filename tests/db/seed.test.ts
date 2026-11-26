@@ -52,6 +52,8 @@ const seededTables = [
   schema.suppliers,
   schema.ingredients,
   schema.stockMovements,
+  schema.recipeItems,
+  schema.modifierOptionIngredients,
 ];
 
 async function snapshot(tx: DbTransaction) {
@@ -76,6 +78,8 @@ describe("db:seed (Schema §7, P0-06)", () => {
         suppliers: 3,
         ingredients: 18,
         stockMovements: 18,
+        recipeItems: 41,
+        modifierOptionIngredients: 4,
       });
 
       const settings = await tx.select().from(schema.settings);
@@ -140,6 +144,67 @@ describe("db:seed (Schema §7, P0-06)", () => {
         stock_qty: "3250.000",
         avg_cost: "285.0000",
       });
+    });
+  });
+
+  it("gives every menu item a recipe and the extra shot its 9 g of beans", async () => {
+    await inRollback(async (tx) => {
+      await seedDatabase(tx, input);
+      const recipes = await tx.execute<{ item: string; lines: number }>(sql`
+        select m.name as item, count(r.ingredient_id)::int as lines
+        from menu_items m
+        left join recipe_items r on r.menu_item_id = m.id
+        group by m.name`);
+      expect(recipes.every((row) => row.lines > 0)).toBe(true);
+      expect(recipes).toHaveLength(data.menuItems.length);
+
+      const deltas = await tx.execute<{
+        option: string;
+        ingredient: string;
+        qty_delta: string;
+      }>(sql`
+        select o.name as option, i.name as ingredient, d.qty_delta
+        from modifier_option_ingredients d
+        join modifier_options o on o.id = d.option_id
+        join ingredients i on i.id = d.ingredient_id
+        order by o.name, i.name`);
+      expect([...deltas]).toEqual([
+        {
+          option: "Extra shot",
+          ingredient: "Biji kopi arabika",
+          qty_delta: "9.000",
+        },
+        { option: "Large", ingredient: "Es batu", qty_delta: "50.000" },
+        { option: "Susu oat", ingredient: "Oat milk", qty_delta: "150.000" },
+        { option: "Susu oat", ingredient: "Susu UHT", qty_delta: "-150.000" },
+      ]);
+    });
+  });
+
+  it("keeps a recipe the owner changed when seeding again", async () => {
+    await inRollback(async (tx) => {
+      await seedDatabase(tx, input);
+      const [latte] = await tx
+        .select({ id: schema.menuItems.id })
+        .from(schema.menuItems)
+        .where(eq(schema.menuItems.name, "Latte"));
+      const [line] = await tx
+        .select()
+        .from(schema.recipeItems)
+        .where(eq(schema.recipeItems.menuItemId, latte!.id))
+        .limit(1);
+      await tx
+        .delete(schema.recipeItems)
+        .where(eq(schema.recipeItems.menuItemId, latte!.id));
+      await tx.insert(schema.recipeItems).values({ ...line!, qty: "1.000" });
+
+      const again = await seedDatabase(tx, input);
+      expect(again.recipeItems).toBe(0);
+      const lines = await tx
+        .select()
+        .from(schema.recipeItems)
+        .where(eq(schema.recipeItems.menuItemId, latte!.id));
+      expect(lines).toEqual([{ ...line!, qty: "1.000" }]);
     });
   });
 

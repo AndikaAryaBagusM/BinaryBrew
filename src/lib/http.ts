@@ -50,6 +50,14 @@ function messageFor(error: AppError): string {
       return t("error.nameTaken");
     case "UNIT_LOCKED":
       return t("error.unitLocked");
+    case "PRICE_NEGATIVE":
+      return t("error.priceNegative", {
+        items: Array.isArray(details.items) ? details.items.join(", ") : "",
+      });
+    case "MODIFIER_RULE":
+      return details.reason === "too_many_defaults"
+        ? t("error.tooManyDefaults")
+        : t("error.tooFewOptions");
     default:
       return t("error.generic");
   }

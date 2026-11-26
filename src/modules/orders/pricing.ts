@@ -199,3 +199,26 @@ export function previewLineTotal(
     .reduce((sum, option) => sum + option.priceDelta, 0);
   return Math.max(0, item.price + deltas) * quantity;
 }
+
+// The lowest unit price a customer can reach for the item (base price plus
+// the cheapest valid choice in every group): each group's `minSelect`
+// cheapest options, plus any further discounts up to `maxSelect`. The owner
+// screens refuse a change that takes this below zero (PRICE_NEGATIVE), so
+// checkout's negative_price refusal never fires for a real catalog.
+export function cheapestUnitPrice(item: {
+  price: number;
+  modifierGroups: readonly (Pick<PricingGroup, "minSelect" | "maxSelect"> & {
+    options: readonly Pick<PricingOption, "priceDelta">[];
+  })[];
+}): number {
+  let total = item.price;
+  for (const group of item.modifierGroups) {
+    const deltas = group.options
+      .map((option) => option.priceDelta)
+      .sort((a, b) => a - b);
+    deltas.slice(0, group.maxSelect).forEach((delta, index) => {
+      if (index < group.minSelect || delta < 0) total += delta;
+    });
+  }
+  return total;
+}
