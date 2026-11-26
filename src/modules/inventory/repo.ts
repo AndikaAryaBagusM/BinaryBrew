@@ -114,6 +114,19 @@ export async function lockIngredient(id: string, db: DbExecutor) {
   return row;
 }
 
+// Availability (P2-03): current stock of the given ingredients, unlocked.
+export function selectStockLevels(ids: string[], db: DbExecutor = getDb()) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: ingredients.id,
+      name: ingredients.name,
+      stockQty: ingredients.stockQty,
+    })
+    .from(ingredients)
+    .where(inArray(ingredients.id, ids));
+}
+
 // Recipes and modifier deltas (P2-02): the ingredients they name, share-locked
 // in id order so a unit change (lockIngredient, for update) cannot slip past.
 export function lockIngredientsForShare(ids: string[], db: DbExecutor) {

@@ -33,6 +33,20 @@ export function selectRecipe(menuItemId: string, db: DbExecutor = getDb()) {
     .orderBy(asc(recipeItems.ingredientId));
 }
 
+// Availability and checkout (P2-03): the recipes of the given items.
+export function selectRecipes(menuItemIds: string[], db: DbExecutor = getDb()) {
+  if (menuItemIds.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      menuItemId: recipeItems.menuItemId,
+      ingredientId: recipeItems.ingredientId,
+      qty: recipeItems.qty,
+    })
+    .from(recipeItems)
+    .where(inArray(recipeItems.menuItemId, menuItemIds))
+    .orderBy(asc(recipeItems.menuItemId), asc(recipeItems.ingredientId));
+}
+
 export async function replaceRecipe(
   menuItemId: string,
   lines: { ingredientId: string; qty: string }[],

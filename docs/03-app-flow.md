@@ -194,11 +194,9 @@ flowchart TD
   D -- "no" --> OK["Available (stock not tracked for this item)"]
   D -- "yes" --> E{"Every recipe ingredient covers one serving?"}
   E -- "no" --> Y
-  E -- "yes" --> F{"Order has modifiers with ingredient deltas?"}
-  F -- "yes" --> G{"Stock covers recipe plus deltas times quantity?"}
-  G -- "no" --> Z["Reject at checkout: say which item"]
+  E -- "yes" --> G{"At checkout: stock covers the whole order (recipe plus chosen option deltas, times quantity)?"}
+  G -- "no" --> Z["Reject at checkout (NOT_ENOUGH_STOCK): say which item, keep it in the cart"]
   G -- "yes" --> OK
-  F -- "no" --> OK
 ```
 
 - Availability is shown on the menu (base serving) and enforced again at checkout (full order).
@@ -316,7 +314,7 @@ Clients fall back to polling every 10 seconds if the stream is down.
 | E4 | Customer pays twice for one order | Each order has one dynamic charge, which the gateway accepts once. Another paid event for a paid order changes nothing and is logged as a warning; if the gateway shows a real second payment, the owner refunds it through the void/refund flow (Phase 3). |
 | E5 | Webhook is delivered twice or out of order | Idempotent by `(provider, event_id)`; state only moves forward. |
 | E6 | Price changed between menu load and checkout | Server returns new prices; customer must confirm the new total before the QR is shown. |
-| E7 | Item deactivated or sold out between cart and checkout | Checkout is rejected with the item names; cart is corrected. |
+| E7 | Item deactivated or sold out between cart and checkout | Checkout is rejected with the item names; cart is corrected. If one serving is still there but not the quantity asked for, the refusal names the items and the customer lowers the quantity (P2-03). |
 | E8 | Ingredient runs out after QR was shown | Payment is accepted; stock may go negative; owner warning. |
 | E9 | Ordering switched off (`ordering_enabled = false`) | C-01 shows the closed state; counter can still create orders. |
 | E10 | Barista taps Ready by mistake | Backwards moves are not allowed (BR-01). Staff tells the customer; the cost is small. An undo feature is a possible later improvement. |

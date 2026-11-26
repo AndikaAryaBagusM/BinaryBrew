@@ -8,7 +8,7 @@ import {
   requireRole,
   type SessionUser,
 } from "@/modules/auth/service";
-import { useIngredients } from "@/modules/inventory/service";
+import { getStockLevels, useIngredients } from "@/modules/inventory/service";
 import {
   cheapestUnitPrice,
   type PricingGroup,
@@ -86,13 +86,18 @@ export async function getPublicMenu(qrToken: string): Promise<PublicMenu> {
       taxInclusive: settings.tax_inclusive,
       serviceChargeBps: settings.service_charge_bps,
     },
-    categories: await loadCategories(),
+    categories: (await loadCategories()).categories,
   };
 }
 
 // Active categories with their active items, options and availability. One
-// snapshot, so an item cannot show a group that was just unlinked.
-function loadCategories(): Promise<PublicMenu["categories"]> {
+// snapshot, so an item cannot show a group that was just unlinked. Also the
+// ids of the items marked sold out by hand (Counter, O-03), which the public
+// menu does not show.
+function loadCategories(): Promise<{
+  categories: PublicMenu["categories"];
+  manualSoldOut: Set<string>;
+}> {
   return getDb().transaction(
     async (tx) => {
       const [categories, items] = await Promise.all([
@@ -112,7 +117,7 @@ function loadCategories(): Promise<PublicMenu["categories"]> {
       const groupsByItem = groupBy(links, (link) => link.menuItemId);
       const itemsByCategory = groupBy(items, (item) => item.categoryId);
 
-      return categories.map((category) => ({
+      const shaped = categories.map((category) => ({
         id: category.id,
         name: category.name,
         items: (itemsByCategory.get(category.id) ?? []).map((item) => ({
@@ -121,8 +126,7 @@ function loadCategories(): Promise<PublicMenu["categories"]> {
           description: item.description,
           price: item.price,
           imageUrl: item.imageUrl,
-          // P2-03 switches this to the availability view (stock).
-          isAvailable: !item.manualSoldOut,
+          isAvailable: item.isAvailable,
           isPromoted: item.isPromoted,
           modifierGroups: (groupsByItem.get(item.id) ?? []).map((group) => ({
             id: group.id,
@@ -138,18 +142,29 @@ function loadCategories(): Promise<PublicMenu["categories"]> {
           })),
         })),
       }));
+      return {
+        categories: shaped,
+        manualSoldOut: new Set(
+          items.filter((item) => item.manualSoldOut).map((item) => item.id),
+        ),
+      };
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
 }
 
 // Counter menu (S-02, S-08, FR-POS-01, FR-POS-04): the same items and rules
-// as self-order, also while self-ordering is closed (Flow E9). A sold-out
-// item says who marked it and when.
+// as self-order, also while self-ordering is closed (Flow E9). An item marked
+// sold out by hand says who marked it and when; one sold out by stock
+// (FR-IV-04) names the ingredients that cannot cover a serving.
+
+export type SoldOutMark = { byName: string | null; at: Date | null };
 
 export type CounterMenuItem = PublicMenuItem & {
-  // Who marked it and when; both null for an item sold out without a record.
-  soldOut: { byName: string | null; at: Date | null } | null;
+  // The manual mark: who set it and when (both null without a record).
+  soldOut: SoldOutMark | null;
+  // Ingredients below one serving, sorted; empty when stock covers it.
+  stockShort: string[];
 };
 
 export type CounterMenu = {
@@ -173,14 +188,14 @@ export async function getCounterMenu(
     ]),
     loadCategories(),
   ]);
-  const soldOutIds = categories.flatMap((category) =>
+  const { categories: shaped, manualSoldOut } = categories;
+  const unavailable = shaped.flatMap((category) =>
     category.items.filter((item) => !item.isAvailable).map((item) => item.id),
   );
-  const marks = await latestAuditByEntity(
-    "menu_item",
-    soldOutIds,
-    SOLD_OUT_ACTIONS,
-  );
+  const [marks, short] = await Promise.all([
+    latestAuditByEntity("menu_item", [...manualSoldOut], SOLD_OUT_ACTIONS),
+    stockShortages(unavailable),
+  ]);
   return {
     pricing: {
       taxRateBps: settings.tax_rate_bps,
@@ -188,21 +203,49 @@ export async function getCounterMenu(
       serviceChargeBps: settings.service_charge_bps,
     },
     manualPaymentNeedsOwnerPin: settings.manual_payment_requires_owner_pin,
-    categories: categories.map((category) => ({
+    categories: shaped.map((category) => ({
       ...category,
-      items: category.items.map((item) => {
-        if (item.isAvailable) return { ...item, soldOut: null };
-        const mark = marks.get(item.id);
-        return {
-          ...item,
-          soldOut:
-            mark?.action === "menu_item.sold_out"
-              ? { byName: mark.actorName, at: mark.at }
-              : { byName: null, at: null },
-        };
-      }),
+      items: category.items.map((item) => ({
+        ...item,
+        soldOut: manualSoldOut.has(item.id)
+          ? soldOutMark(marks.get(item.id))
+          : null,
+        stockShort: short.get(item.id) ?? [],
+      })),
     })),
   };
+}
+
+function soldOutMark(
+  mark: { action: string; actorName: string | null; at: Date } | undefined,
+): SoldOutMark {
+  return mark?.action === "menu_item.sold_out"
+    ? { byName: mark.actorName, at: mark.at }
+    : { byName: null, at: null };
+}
+
+// FR-IV-04: per item, the recipe ingredients whose stock is below one
+// serving (why v_menu_item_availability says no), sorted by name.
+async function stockShortages(
+  itemIds: string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, string[]>> {
+  const recipes = await admin.selectRecipes(itemIds, db);
+  const stock = await getStockLevels(
+    recipes.map((row) => row.ingredientId),
+    db,
+  );
+  const short = new Map<string, string[]>();
+  for (const row of recipes) {
+    const level = stock.get(row.ingredientId);
+    if (!level || level.stockMilli >= toMilli(row.qty)) continue;
+    short.set(row.menuItemId, [
+      ...(short.get(row.menuItemId) ?? []),
+      level.name,
+    ]);
+  }
+  for (const names of short.values()) names.sort((a, b) => a.localeCompare(b));
+  return short;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -255,7 +298,10 @@ export type OwnerMenuItem = {
   price: number;
   isActive: boolean;
   isPromoted: boolean;
+  // False when sold out for any reason (manual mark or stock).
+  isAvailable: boolean;
   soldOut: CounterMenuItem["soldOut"];
+  stockShort: string[];
 };
 
 export type OwnerMenu = {
@@ -271,11 +317,14 @@ export async function getOwnerMenu(
     repo.selectAllCategories(),
     repo.selectAllItems(),
   ]);
-  const marks = await latestAuditByEntity(
-    "menu_item",
-    items.filter((item) => item.manualSoldOut).map((item) => item.id),
-    SOLD_OUT_ACTIONS,
-  );
+  const [marks, short] = await Promise.all([
+    latestAuditByEntity(
+      "menu_item",
+      items.filter((item) => item.manualSoldOut).map((item) => item.id),
+      SOLD_OUT_ACTIONS,
+    ),
+    stockShortages(items.map((item) => item.id)),
+  ]);
   const counts = groupBy(items, (item) => item.categoryId);
   return {
     categories: categories.map((category) => ({
@@ -284,17 +333,11 @@ export async function getOwnerMenu(
       isActive: category.isActive,
       itemCount: counts.get(category.id)?.length ?? 0,
     })),
-    items: items.map(({ manualSoldOut, ...item }) => {
-      const mark = manualSoldOut ? marks.get(item.id) : undefined;
-      return {
-        ...item,
-        soldOut: !manualSoldOut
-          ? null
-          : mark?.action === "menu_item.sold_out"
-            ? { byName: mark.actorName, at: mark.at }
-            : { byName: null, at: null },
-      };
-    }),
+    items: items.map(({ manualSoldOut, ...item }) => ({
+      ...item,
+      soldOut: manualSoldOut ? soldOutMark(marks.get(item.id)) : null,
+      stockShort: short.get(item.id) ?? [],
+    })),
   };
 }
 
@@ -992,6 +1035,8 @@ export async function requireOrderingQr(
 
 export type OrderableItem = Omit<PricingItem, "modifierGroups"> & {
   isAvailable: boolean;
+  // One serving, per ingredient (P2-03 checkout, P2-04 deduction).
+  recipe: RecipeLine[];
   modifierGroups: (Omit<PricingGroup, "options"> & {
     options: (PricingOption & {
       // What the option adds to or takes from the recipe, per unit. Copied
@@ -1004,8 +1049,9 @@ export type OrderableItem = Omit<PricingItem, "modifierGroups"> & {
 
 // Checkout (Schema §5.1 steps 3-4): current prices, active modifier groups and
 // availability for the requested items, read inside the caller's transaction.
-// Ids that do not exist are left out. Availability uses the manual flag until
-// P2-03 adds stock.
+// Ids that do not exist are left out. `isAvailable` is one serving
+// (v_menu_item_availability); the caller checks the whole order against stock
+// (orders/stock.ts).
 export async function getOrderableItems(
   ids: readonly string[],
   db: DbExecutor,
@@ -1018,6 +1064,13 @@ export async function getOrderableItems(
   const options = await repo.selectActiveOptions(
     [...new Set(links.map((link) => link.id))],
     db,
+  );
+  const recipes = groupBy(
+    await admin.selectRecipes(
+      items.map((item) => item.id),
+      db,
+    ),
+    (row) => row.menuItemId,
   );
   const ingredientDeltas = new Map<string, IngredientDelta[]>();
   for (const row of await admin.selectOptionDeltas(
@@ -1035,7 +1088,11 @@ export async function getOrderableItems(
     id: item.id,
     name: item.name,
     price: item.price,
-    isAvailable: item.isActive && item.categoryActive && !item.manualSoldOut,
+    isAvailable: item.isAvailable && item.categoryActive,
+    recipe: (recipes.get(item.id) ?? []).map((row) => ({
+      ingredientId: row.ingredientId,
+      qty: normalizedQty(row.qty),
+    })),
     modifierGroups: links
       .filter((link) => link.menuItemId === item.id)
       .map((group) => ({
@@ -1073,14 +1130,17 @@ export type SuggestionItem = {
   isPromoted: boolean;
 };
 
-// Items a recommendation may offer (Tech §10), in menu order. Availability
-// uses the manual flag until P2-03 adds stock, like getOrderableItems.
+// Items a recommendation may offer (Tech §10), in menu order, with one-serving
+// availability like the menu.
 export async function getSuggestionItems(
   db: DbExecutor = getDb(),
 ): Promise<SuggestionItem[]> {
   const rows = await repo.selectSuggestionItems(db);
-  return rows.map(({ manualSoldOut, ...item }) => ({
-    ...item,
-    isAvailable: !manualSoldOut,
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    price: row.price,
+    isAvailable: row.isAvailable,
+    isPromoted: row.isPromoted,
   }));
 }

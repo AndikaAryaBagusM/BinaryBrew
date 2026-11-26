@@ -257,7 +257,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 
 **S-07 Owner PIN.** Compact PIN dialog: "Masukkan PIN pemilik untuk melanjutkan". Shows what will happen ("Batalkan pesanan #014").
 
-**S-08 Sold-out panel.** Searchable list of menu items with a switch each; items that are sold out because of low stock show a lock icon and "Stok habis (otomatis)" and the switch only offers a manual override label.
+**S-08 Sold-out panel.** Searchable list of menu items with a switch each; items that are sold out because of low stock show a lock icon and "Stok habis (otomatis)" with the short ingredients. The switch only sets the manual mark: it cannot make a stock sold-out item available (a restock does), so it is disabled unless a manual mark is left to clear (P2-03).
 
 **S-09 Quick restock.** Ingredient picker, quantity, total price, optional supplier; shows the new weighted-average cost after saving.
 
@@ -273,7 +273,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 |---|---|
 | O-01 | Centred card: email, password, "Masuk". Rate-limit message on repeated failures. |
 | O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
-| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column and no stock-based statuses yet; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
+| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column yet; since P2-03 the status shows "Stok habis" with the short ingredients when stock cannot cover one serving; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
 | O-04 | `/owner/modifiers` "Pilihan menu" (P2-02): group cards on the left (rule "Wajib · pilih 1" / "Opsional · maks 2", "dipakai di N menu", a "Tidak mengubah stok" tag when no option has deltas); the chosen group on the right with name, "Aktif" switch, "Minimal pilih" / "Maksimal pilih", an options table (Opsi / Tambahan harga / Pengaruh ke stok (per porsi) / Aktif), "Tambah opsi" opening a side panel with ingredient delta rows (minus = uses less), and read-only "Dipakai di menu" chips. Groups and options are switched off, never deleted. |
 | O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
 | O-06 | The O-03 edit panel, titled with the item name, gets tabs Detail / Resep / Pilihan (P2-02). Resep: cards Harga jual / HPP / Margin (green, red when negative), a table Bahan / Jumlah / Biaya/unit / Biaya with a delete button per line, "Tambah bahan", a blue row and notice for an ingredient with no cost yet (counted as 0), and "Simpan resep". HPP and margin are computed live from the current average costs (`src/lib/money.ts`). Pilihan: tick and order the groups the item offers; "Simpan pilihan". A new item gets these tabs after it is saved. |
@@ -336,6 +336,9 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `cart.full` | Keranjang sudah penuh, maksimal 30 menu |
 | `checkout.updateCart` | Perbarui keranjang |
 | `checkout.soldOutText` | Menu ini sudah habis dan akan dihapus dari keranjang: |
+| `checkout.notEnoughTitle` | Stok tidak cukup |
+| `checkout.notEnoughText` | Stok tidak cukup untuk jumlah ini. Kurangi jumlahnya di keranjang: |
+| `checkout.changeQuantity` | Ubah jumlah |
 | `checkout.priceChangedText` | Total pesananmu sekarang {total} |
 | `reco.title` | Sering dipesan bersama |
 | `reco.add` | Tambah |
@@ -378,6 +381,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `receipt.backToStatus` | Kembali ke status |
 | `error.qrInvalid` | Kode QR sudah tidak berlaku. Silakan scan kode di kasir. |
 | `error.itemSoldOut` | Maaf, ada menu yang habis |
+| `error.notEnoughStock` | Stok tidak cukup untuk jumlah ini: {items}. Kurangi jumlahnya. |
 | `error.priceChanged` | Harga diperbarui |
 | `error.generic` | Ada gangguan, coba lagi |
 | `error.validation` | Data yang dikirim tidak valid |
@@ -510,6 +514,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.available` | Tersedia |
 | `counter.markedSoldOutBy` | Ditandai habis oleh {name}, {time} |
 | `counter.markedSoldOut` | Ditandai habis |
+| `counter.stockOut` | Stok habis (otomatis) · {items} |
 | `board.preparing` | Sedang disiapkan |
 | `board.ready` | Siap diambil |
 | `board.empty` | Belum ada pesanan |
@@ -563,6 +568,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.markSoldOutItem` | Tandai {name} habis |
 | `owner.soldOutManualBy` | Manual · {name} {time} |
 | `owner.soldOutManual` | Manual |
+| `owner.stockOut` | Stok habis |
 | `owner.categoryInactive` | Kategori nonaktif |
 | `owner.itemName` | Nama menu |
 | `owner.priceHelp` | Harga jual dalam rupiah, tanpa desimal |

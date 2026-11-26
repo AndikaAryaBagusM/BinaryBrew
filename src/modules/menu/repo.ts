@@ -11,6 +11,13 @@ import {
 
 // SQL only; shaping and rules live in service.ts.
 
+// One serving available (FR-IV-04): active, not marked sold out, and every
+// recipe ingredient covers one serving (v_menu_item_availability, Schema §3).
+const isAvailable = sql<boolean>`(
+  select a.is_available from v_menu_item_availability a
+  where a.menu_item_id = ${menuItems.id}
+)`;
+
 export async function selectActiveQr(token: string, db: DbExecutor = getDb()) {
   const [row] = await db
     .select({ id: qrTokens.id, label: qrTokens.label })
@@ -39,6 +46,7 @@ export function selectActiveItems(db: DbExecutor = getDb()) {
       imageUrl: menuItems.imageUrl,
       isPromoted: menuItems.isPromoted,
       manualSoldOut: menuItems.manualSoldOut,
+      isAvailable,
     })
     .from(menuItems)
     .innerJoin(categories, eq(categories.id, menuItems.categoryId))
@@ -109,6 +117,7 @@ export function selectItemsForOrder(ids: string[], db: DbExecutor = getDb()) {
       price: menuItems.price,
       isActive: menuItems.isActive,
       manualSoldOut: menuItems.manualSoldOut,
+      isAvailable,
       categoryActive: categories.isActive,
     })
     .from(menuItems)
@@ -162,6 +171,7 @@ export function selectAllItems(db: DbExecutor = getDb()) {
       isActive: menuItems.isActive,
       isPromoted: menuItems.isPromoted,
       manualSoldOut: menuItems.manualSoldOut,
+      isAvailable,
     })
     .from(menuItems)
     .innerJoin(categories, eq(categories.id, menuItems.categoryId))
@@ -339,6 +349,7 @@ export function selectSuggestionItems(db: DbExecutor = getDb()) {
       price: menuItems.price,
       isPromoted: menuItems.isPromoted,
       manualSoldOut: menuItems.manualSoldOut,
+      isAvailable,
     })
     .from(menuItems)
     .innerJoin(categories, eq(categories.id, menuItems.categoryId))

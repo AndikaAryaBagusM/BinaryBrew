@@ -84,6 +84,7 @@ beforeAll(async () => {
   staffToken = staffLogin.token;
 
   catalog = await createCatalog();
+  // Enough stock that the snapshot order passes the P2-03 stock check.
   const ingredient = (name: string, unit: "g" | "ml") =>
     createIngredient(owner, {
       name: unique(name),
@@ -91,7 +92,7 @@ beforeAll(async () => {
       unit,
       minStockQty: "0",
       isActive: true,
-      opening: null,
+      opening: { quantity: "1000", totalCost: 100_000 },
     }).then((row) => row.id);
   beans = await ingredient("Biji kopi", "g");
   milk = await ingredient("Susu", "ml");

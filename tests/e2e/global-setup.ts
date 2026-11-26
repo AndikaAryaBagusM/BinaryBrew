@@ -128,6 +128,33 @@ export default async function globalSetup() {
       },
     ]);
 
+    // P2-03 availability specs: Es krim vanila below one Affogato (80 g) and
+    // Cokelat bubuk for two Es Cokelat (25 g each). Written as waste
+    // movements, so stock_qty still equals the ledger (Schema §4 I7).
+    const setStock = async (name: string, target: number) => {
+      const [row] = await db
+        .select({
+          id: schema.ingredients.id,
+          stockQty: schema.ingredients.stockQty,
+        })
+        .from(schema.ingredients)
+        .where(eq(schema.ingredients.name, name));
+      await db.transaction(async (tx) => {
+        await tx.insert(schema.stockMovements).values({
+          ingredientId: row!.id,
+          type: "waste",
+          qtyDelta: String(target - Number(row!.stockQty)),
+          note: "e2e: availability",
+        });
+        await tx
+          .update(schema.ingredients)
+          .set({ stockQty: String(target) })
+          .where(eq(schema.ingredients.id, row!.id));
+      });
+    };
+    await setStock("Es krim vanila", 50);
+    await setStock("Cokelat bubuk", 60);
+
     const [qr] = await db
       .select({ token: schema.qrTokens.token })
       .from(schema.qrTokens)
