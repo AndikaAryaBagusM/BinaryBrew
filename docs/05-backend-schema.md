@@ -657,6 +657,8 @@ Manual confirmation (S-05, FR-PM-05) follows the same steps from step 2, with th
 
 ### 5.5 Restock and weighted-average cost (Phase 2)
 
+Opening stock (P2-01): an ingredient created with opening stock gets one `opening` movement in the same transaction, and `avg_cost` = total price ÷ quantity (rounded half-up to 4 decimals in `src/lib/money.ts`). Without one it starts at stock 0 and `avg_cost` 0 ("Biaya belum ada") until its first restock.
+
 For each purchased ingredient:
 
 ```
@@ -759,7 +761,7 @@ where ready_at is not null
 1. Settings (3.9), one owner user (email, password and PIN from the `SEED_*` variables in `.env`), two staff users, one counter device.
 2. Categories, about 12 menu items, modifier groups (Ukuran, Gula, Es, Tambahan) and options.
 3. QR tokens: "Pintu masuk" and "Meja 1" to "Meja 6".
-4. (Phase 2) Ingredients, recipes, an opening stock movement for each ingredient.
+4. (Phase 2) Suppliers and ingredients, each ingredient with an opening stock movement by the owner and its opening cost (P2-01); recipes follow with P2-02.
 5. About 2,000 synthetic paid orders over 60 days (`is_seed = true`) generated with planted pairings (for example kopi susu + croissant) and realistic evening peaks, so the Apriori job has something to find. The generator is deterministic (fixed random seed) and documented, so the demo can state exactly how the data was made. It is a separate command, `npm run seed:orders` (`client_session = 'seed'`); orders imported from the old POS are also `is_seed` (`client_session = 'import'`, docs/02 §10).
 
 ## 8. Retention and privacy

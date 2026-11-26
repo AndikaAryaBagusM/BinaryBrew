@@ -103,3 +103,59 @@ export function formatBpsAsPercent(bps: number): string {
   if (cents === 0) return String(whole);
   return `${whole},${String(cents).padStart(2, "0").replace(/0$/, "")}`;
 }
+
+// Ingredient cost per base unit (Schema §3.5 `avg_cost`, numeric(14,4)) is
+// carried as a decimal string ("285.0000") and handled here in whole
+// ten-thousandths of a rupiah.
+const COST_SCALE = BigInt(10_000);
+const big = (value: number) => BigInt(value);
+const COST_DECIMAL = /^(\d{1,10})(?:\.(\d{1,4}))?$/;
+
+// Opening stock (docs/05 §3.5): the cost per unit of a quantity bought for
+// `totalCost` rupiah, rounded half-up to 4 decimals. `quantityMilli` is in
+// thousandths of a unit (lib/quantity.ts). BigInt, so large totals stay exact.
+export function unitCostFromTotal(
+  totalCost: number,
+  quantityMilli: number,
+): string {
+  assertAmount(totalCost, "total cost");
+  if (!Number.isSafeInteger(quantityMilli) || quantityMilli <= 0) {
+    throw new RangeError(
+      `quantity must be a positive safe integer, got ${quantityMilli}`,
+    );
+  }
+  const numerator = BigInt(totalCost) * big(1000) * COST_SCALE;
+  const denominator = BigInt(quantityMilli);
+  let scaled = numerator / denominator;
+  if ((numerator % denominator) * big(2) >= denominator) scaled += big(1);
+  const whole = scaled / COST_SCALE;
+  const fraction = String(scaled % COST_SCALE).padStart(4, "0");
+  return `${whole}.${fraction}`;
+}
+
+// True when the cost is zero: O-05 shows "Biaya belum ada".
+export function isZeroCost(cost: string): boolean {
+  const match = COST_DECIMAL.exec(cost.trim());
+  if (!match) throw new RangeError(`not a cost: "${cost}"`);
+  return /^0+$/.test(match[1]!) && /^0*$/.test(match[2] ?? "");
+}
+
+const costDigits = new Intl.NumberFormat("id-ID", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+// O-05 "Biaya rata-rata": "285.0000" → "Rp 285,00", "11000" → "Rp 11.000,00"
+// (half-up to 2 decimals for display only).
+export function formatUnitCost(cost: string): string {
+  const match = COST_DECIMAL.exec(cost.trim());
+  if (!match) throw new RangeError(`not a cost: "${cost}"`);
+  const scaled =
+    BigInt(match[1]!) * COST_SCALE + BigInt((match[2] ?? "").padEnd(4, "0"));
+  let cents = scaled / big(100);
+  if (scaled % big(100) >= big(50)) cents += big(1);
+  const whole = cents / big(100);
+  const fraction = Number(cents % big(100)) / 100;
+  const text = costDigits.format(Number(whole) + fraction);
+  return `Rp ${text}`;
+}

@@ -67,12 +67,14 @@ export const thClass =
   "h-11 bg-surface-sunken px-4 text-caption font-medium whitespace-nowrap text-ink-muted";
 export const tdClass = "h-14 border-t border-line px-4";
 
-export type TagTone = "ready" | "expired" | "waiting";
+export type TagTone = "ready" | "expired" | "waiting" | "danger" | "info";
 
 const tagTone: Record<TagTone, string> = {
   ready: "bg-status-ready-bg text-status-ready-fg",
   expired: "bg-status-expired-bg text-status-expired-fg",
   waiting: "bg-status-waiting-bg text-status-waiting-fg",
+  danger: "bg-status-voided-bg text-status-voided-fg",
+  info: "bg-info-soft text-info",
 };
 
 export function Tag({

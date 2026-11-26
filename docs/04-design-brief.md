@@ -275,7 +275,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 | O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
 | O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column and no stock-based statuses yet; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
 | O-04 | Group list with options; per option: name, price delta, ingredient deltas (Phase 2). |
-| O-05 | Table: ingredient, unit, stock, minimum, average cost, status chip (Aman, Menipis, Habis, Minus). |
+| O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
 | O-06 | Ingredient rows with quantity; live HPP and margin preview; warning if an ingredient has no cost yet. |
 | O-07 | Multi-row entry: ingredient, quantity, total price, supplier, date; shows the new average cost per row before saving. |
 | O-08 | One row per ingredient with system quantity, counted quantity input, difference, reason selector (required when different). Owner PIN on save. |
@@ -391,6 +391,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
 | `error.orderStatusChanged` | Status pesanan sudah berubah. Daftar diperbarui. |
 | `error.nameTaken` | Nama ini sudah dipakai. Pilih nama lain. |
+| `error.unitLocked` | Satuan tidak bisa diubah: bahan ini sudah punya riwayat stok atau dipakai di resep. |
 | `auth.loginFailed` | Email atau kata sandi salah |
 | `auth.signInRequired` | Silakan masuk terlebih dahulu |
 | `auth.forbidden` | Anda tidak punya akses untuk tindakan ini |
@@ -574,6 +575,59 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.categoryName` | Nama kategori |
 | `owner.categoryItemCount` | {n} menu |
 | `owner.categoryActive` | Kategori {name} aktif |
+| `owner.navSectionStock` | Stok |
+| `owner.navIngredients` | Bahan & stok |
+| `owner.ingredientsTitle` | Bahan & stok |
+| `owner.ingredientsSubtitle` | Stok dihitung dari resep setiap pesanan dibayar. |
+| `owner.ingredientsEmpty` | Belum ada bahan. Tambahkan bahan pertama. |
+| `owner.addIngredient` | Tambah bahan |
+| `owner.editIngredientTitle` | Ubah bahan |
+| `owner.colIngredient` | Bahan |
+| `owner.colKind` | Jenis |
+| `owner.colUnit` | Satuan |
+| `owner.colStock` | Stok |
+| `owner.colMinimum` | Minimum |
+| `owner.colAvgCost` | Biaya rata-rata |
+| `owner.kindRaw` | Bahan baku |
+| `owner.kindResale` | Jual jadi |
+| `owner.kindHelp` | Jual jadi: dibeli siap jual, misalnya croissant. |
+| `owner.unitG` | g (gram) |
+| `owner.unitMl` | ml (mililiter) |
+| `owner.unitPcs` | pcs (buah) |
+| `owner.unitLockedHelp` | Satuan terkunci karena bahan ini sudah punya riwayat stok atau dipakai di resep. |
+| `owner.ingredientName` | Nama bahan |
+| `owner.minStock` | Stok minimum |
+| `owner.minStockHelp` | Status jadi Menipis saat stok sampai batas ini. |
+| `owner.openingTitle` | Stok awal (opsional) |
+| `owner.openingQty` | Jumlah stok awal |
+| `owner.openingCost` | Total harga stok awal |
+| `owner.openingHelp` | Isi keduanya: biaya rata-rata per satuan dihitung dari sini. |
+| `owner.openingBoth` | Isi jumlah dan total harga, atau kosongkan keduanya |
+| `owner.openingPreview` | Biaya rata-rata {cost} / {unit} |
+| `owner.quantityInvalid` | Tulis angka, misalnya 1.250 atau 0,5 |
+| `owner.totalCostInvalid` | Tulis total harga dalam rupiah, misalnya 108.000 |
+| `owner.currentStock` | Stok sekarang {qty} {unit}, biaya rata-rata {cost}. Stok berubah lewat restock dan stock opname. |
+| `owner.currentStockNoCost` | Stok sekarang {qty} {unit}, biaya belum ada. Stok berubah lewat restock dan stock opname. |
+| `owner.ingredientActive` | Bahan aktif |
+| `owner.ingredientActiveHelp` | Bahan nonaktif tidak bisa dipilih di resep dan restock. |
+| `owner.stockOk` | Aman |
+| `owner.stockLow` | Menipis |
+| `owner.stockEmpty` | Habis |
+| `owner.stockMinus` | Minus |
+| `owner.stockNoCost` | Biaya belum ada |
+| `owner.stockSummaryLabel` | Ringkasan stok |
+| `owner.stockSummaryOk` | {n} aman |
+| `owner.stockSummaryLow` | {n} menipis |
+| `owner.stockSummaryEmpty` | {n} habis |
+| `owner.stockSummaryMinus` | {n} minus |
+| `owner.suppliers` | Pemasok |
+| `owner.suppliersHelp` | Pemasok dipilih saat mencatat restock. Pemasok nonaktif tidak muncul di pilihan. |
+| `owner.suppliersEmpty` | Belum ada pemasok. |
+| `owner.supplierName` | Nama pemasok |
+| `owner.supplierNote` | Catatan (opsional) |
+| `owner.supplierActive` | Pemasok {name} aktif |
+| `owner.newSupplier` | Pemasok baru |
+| `owner.addSupplier` | Tambah pemasok |
 | `owner.newCategory` | Kategori baru |
 | `owner.addCategory` | Tambah |
 | `owner.usersTitle` | Pengguna & perangkat |

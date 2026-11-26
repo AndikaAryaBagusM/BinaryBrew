@@ -192,7 +192,8 @@ describe("append-only ledgers (I8)", () => {
 
   it("rejects updating or deleting stock_movements", async () => {
     const [ingredient] = await migrated`
-      insert into ingredients (name, unit) values ('Test beans', 'g') returning id`;
+      insert into ingredients (name, unit, stock_qty)
+      values ('Test beans', 'g', 1000) returning id`;
     const [row] = await migrated`
       insert into stock_movements (ingredient_id, type, qty_delta)
       values (${ingredient!.id}, 'opening', 1000) returning id`;

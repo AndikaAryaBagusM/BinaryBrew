@@ -1,4 +1,4 @@
-import { asc, eq, TransactionRollbackError } from "drizzle-orm";
+import { asc, eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
@@ -49,6 +49,9 @@ const seededTables = [
   schema.menuItems,
   schema.menuItemModifierGroups,
   schema.qrTokens,
+  schema.suppliers,
+  schema.ingredients,
+  schema.stockMovements,
 ];
 
 async function snapshot(tx: DbTransaction) {
@@ -70,6 +73,9 @@ describe("db:seed (Schema §7, P0-06)", () => {
         // 4 coffee-style drinks x 4 groups, 2 drinks x 3, Affogato x 1
         menuItemModifierGroups: 23,
         qrTokens: 7,
+        suppliers: 3,
+        ingredients: 18,
+        stockMovements: 18,
       });
 
       const settings = await tx.select().from(schema.settings);
@@ -98,6 +104,42 @@ describe("db:seed (Schema §7, P0-06)", () => {
       const qr = await tx.select().from(schema.qrTokens);
       expect(qr.map((q) => q.label).sort()).toEqual([...data.qrLabels].sort());
       expect(new Set(qr.map((q) => q.token)).size).toBe(7);
+    });
+  });
+
+  it("gives every seeded ingredient its opening movement and cost (I7)", async () => {
+    await inRollback(async (tx) => {
+      await seedDatabase(tx, input);
+      const rows = await tx.execute<{
+        name: string;
+        stock_qty: string;
+        ledger: string;
+        avg_cost: string;
+        movements: number;
+        created_by_owner: boolean;
+      }>(sql`
+        select i.name, i.stock_qty, i.avg_cost,
+          coalesce(sum(m.qty_delta), 0) as ledger,
+          count(m.id)::int as movements,
+          bool_and(m.type = 'opening' and u.role = 'owner') as created_by_owner
+        from ingredients i
+        left join stock_movements m on m.ingredient_id = i.id
+        left join users u on u.id = m.created_by
+        group by i.id`);
+      expect(rows.map((r) => r.name).sort()).toEqual(
+        data.ingredients.map((i) => i.name).sort(),
+      );
+      for (const row of rows) {
+        expect(Number(row.ledger), row.name).toBe(Number(row.stock_qty));
+        expect(row.movements, row.name).toBe(1);
+        expect(row.created_by_owner, row.name).toBe(true);
+        expect(Number(row.avg_cost), row.name).toBeGreaterThan(0);
+      }
+      const beans = rows.find((r) => r.name === "Biji kopi arabika")!;
+      expect(beans).toMatchObject({
+        stock_qty: "3250.000",
+        avg_cost: "285.0000",
+      });
     });
   });
 

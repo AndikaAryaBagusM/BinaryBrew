@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { GET as menuGet } from "@/app/api/public/menu/route";
@@ -147,12 +147,17 @@ describe("getPublicMenu (FR-CO-01, FR-CO-02)", () => {
       taxInclusive: true,
       serviceChargeBps: 0,
     });
+    // Upsert: another file may have left these keys at their defaults.
     await getDb()
       .insert(schema.settings)
       .values([
         { key: "tax_rate_bps", value: 1100 },
         { key: "service_charge_bps", value: 500 },
-      ]);
+      ])
+      .onConflictDoUpdate({
+        target: schema.settings.key,
+        set: { value: sql`excluded.value` },
+      });
     try {
       expect((await getPublicMenu(catalog.qr.token)).pricing).toEqual({
         taxRateBps: 1100,

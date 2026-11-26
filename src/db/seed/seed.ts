@@ -2,6 +2,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Db, DbExecutor } from "@/db/client";
 import * as schema from "@/db/schema";
 import { newQrToken } from "@/lib/ids";
+import { unitCostFromTotal } from "@/lib/money";
+import { fromMilli, toMilli } from "@/lib/quantity";
 import { hashSecret, hashToken } from "@/modules/auth/hashing";
 import * as data from "./data";
 
@@ -25,6 +27,9 @@ export type SeedSummary = {
   menuItems: number;
   menuItemModifierGroups: number;
   qrTokens: number;
+  suppliers: number;
+  ingredients: number;
+  stockMovements: number;
 };
 
 // Idempotent: every row is looked up by its natural key and created only when
@@ -45,6 +50,9 @@ export function seedDatabase(
       menuItems: 0,
       menuItemModifierGroups: 0,
       qrTokens: 0,
+      suppliers: 0,
+      ingredients: 0,
+      stockMovements: 0,
     };
 
     // 1. Settings (Schema §3.9)
@@ -234,6 +242,61 @@ export function seedDatabase(
         .insert(schema.qrTokens)
         .values(qrToCreate.map((label) => ({ label, token: newQrToken() })));
       summary.qrTokens = qrToCreate.length;
+    }
+
+    // 8. Suppliers, then ingredients with their opening stock (Schema §7
+    // step 4). A new ingredient gets its opening movement in this same
+    // transaction, so stock_qty equals the ledger sum (I7). Existing
+    // ingredients keep whatever stock they have now.
+    const supplierRows = await tx
+      .insert(schema.suppliers)
+      .values(data.supplierNames.map((name) => ({ name })))
+      .onConflictDoNothing()
+      .returning({ id: schema.suppliers.id });
+    summary.suppliers = supplierRows.length;
+
+    const existingIngredients = await tx
+      .select({ name: schema.ingredients.name })
+      .from(schema.ingredients)
+      .where(
+        inArray(
+          schema.ingredients.name,
+          data.ingredients.map((i) => i.name),
+        ),
+      );
+    const ingredientsToCreate = data.ingredients.filter(
+      (i) => !existingIngredients.some((row) => row.name === i.name),
+    );
+    if (ingredientsToCreate.length > 0) {
+      const created = await tx
+        .insert(schema.ingredients)
+        .values(
+          ingredientsToCreate.map((i) => {
+            const milli = toMilli(i.openingQty);
+            return {
+              name: i.name,
+              kind: i.kind,
+              unit: i.unit,
+              minStockQty: fromMilli(toMilli(i.minStockQty)),
+              stockQty: fromMilli(milli),
+              avgCost: unitCostFromTotal(i.openingTotalCost, milli),
+            };
+          }),
+        )
+        .returning({
+          id: schema.ingredients.id,
+          stockQty: schema.ingredients.stockQty,
+        });
+      await tx.insert(schema.stockMovements).values(
+        created.map((row) => ({
+          ingredientId: row.id,
+          type: "opening" as const,
+          qtyDelta: row.stockQty,
+          createdBy: owner!.id,
+        })),
+      );
+      summary.ingredients = created.length;
+      summary.stockMovements = created.length;
     }
 
     return summary;
