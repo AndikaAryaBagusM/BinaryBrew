@@ -7,7 +7,8 @@ import { e2eTestDatabaseUrl } from "../integration/databases";
 // P1-11 acceptance (S-02 POS, S-03, S-04, S-05, S-06, S-07, S-08; FR-POS-01,
 // FR-POS-02, FR-POS-04, FR-POS-05, FR-PM-05): a walk-in order paid via mock;
 // a manual confirmation needs the owner's PIN and writes an audit entry;
-// marking an item sold out updates the customer menu.
+// marking an item sold out updates the customer menu. P2-03: an item whose
+// stock cannot cover one serving is locked on S-08.
 
 const qrToken = process.env.E2E_QR_TOKEN!;
 const deviceToken = process.env.E2E_DEVICE_TOKEN!;
@@ -204,4 +205,28 @@ test("marking an item sold out updates the customer menu", async ({
     await sql`update menu_items set manual_sold_out = false
       where name = ${item}`;
   }
+});
+
+test("an item out of stock is locked on S-08 and on the customer menu", async ({
+  page,
+  context,
+}) => {
+  // global-setup.ts leaves 50 g of Es krim vanila; Affogato needs 80 g.
+  await page.getByRole("button", { name: "Habis", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ketersediaan menu" });
+  await panel.getByLabel("Cari menu").fill("affogato");
+  await expect(
+    panel.getByText("Stok habis (otomatis) · Es krim vanila"),
+  ).toBeVisible();
+  const toggle = panel.getByRole("switch", { name: "Affogato" });
+  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(tile(page, "Affogato")).toBeDisabled();
+
+  const customer = await context.newPage();
+  await customer.goto(`/o/${qrToken}`);
+  await expect(
+    customer.getByRole("button", { name: "Tambah Affogato" }),
+  ).toBeDisabled();
 });

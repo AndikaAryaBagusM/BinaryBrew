@@ -293,3 +293,23 @@ export async function updateSupplier(
     return { id, changed };
   });
 }
+
+// Availability (P2-03, menu and orders modules): the current stock of the
+// given ingredients in thousandths of their base unit, with their names.
+// Plain reads: stock only changes at payment (BR-05), restock and counts,
+// and checkout compares against what is there now (Schema §5.1 step 4).
+export async function getStockLevels(
+  ids: readonly string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, { name: string; stockMilli: number }>> {
+  const rows = await repo.selectStockLevels(
+    [...new Set(ids)].filter((id) => UUID.test(id)),
+    db,
+  );
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { name: row.name, stockMilli: toMilli(row.stockQty) },
+    ]),
+  );
+}

@@ -170,8 +170,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /api/public/menu?qr=<token>` | Public | Categories, items (with availability and the promote flag for the "Rekomendasi" tag), modifier groups. Rejects invalid/rotated token. |
-| `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, `status`, `total`, `expiresAt` and `payment` (`id`, `qrString`, `amount`, `expiresAt`); the charge is created after the order commits, and a retry with the same key creates it if that failed. |
+| `GET /api/public/menu?qr=<token>` | Public | Categories, items (with availability and the promote flag for the "Rekomendasi" tag), modifier groups. Rejects invalid/rotated token. `isAvailable` is false when the item is marked sold out or a recipe ingredient cannot cover one serving (`v_menu_item_availability`, FR-IV-04). |
+| `POST /api/public/orders` | Public + rate limit | Create order and payment charge. Body: `qrToken`, `clientSession`, `items[{menuItemId, quantity, modifierOptionIds[]}]`, `recommendationEventIds[]` (optional). Returns `publicToken`, `status`, `total`, `expiresAt` and `payment` (`id`, `qrString`, `amount`, `expiresAt`); the charge is created after the order commits, and a retry with the same key creates it if that failed. 409 `ITEM_SOLD_OUT` (`details.items` `[{menuItemId, name}]`) when an item is inactive, marked sold out or cannot cover one serving; 409 `NOT_ENOUGH_STOCK` (same `details.items`) when the whole order needs more of an ingredient than is in stock (docs/05 §5.1 step 4). |
 | `GET /api/public/orders/{publicToken}` | Token | Status, items with options, totals, queue number, payment (QR string only while it can be paid), menu path. `no-store`; 404 for an unknown token. |
 | `POST /api/public/orders/{publicToken}/cancel` | Token, same origin | C-05 "Kembali ke keranjang": an unpaid self-order expires now with its pending charge (charge cancelled at the provider, best effort). Any other order is left unchanged (BR-06). Returns `{status}`. |
 | `GET /api/stream/orders/{publicToken}` | Token | SSE: `order` events `{status, queueNumber}` for that order, the current state first. 404 for an unknown token. |
@@ -205,15 +205,15 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | Method and path | Auth | Purpose |
 |---|---|---|
 | `GET /api/counter/orders?status=` | Staff | Paid queue (`paid`, `preparing`, `ready`), oldest payment first, never cached. The `status` filter for recent orders is not built yet. |
-| `GET /api/counter/menu` | Staff | Menu for the POS grid and S-08: categories, items with modifier groups, availability and who marked an item sold out (name, time), pricing settings and whether manual confirmation needs the owner PIN. Never cached; ignores `ordering_enabled`. |
-| `POST /api/counter/orders` | Staff | Create a walk-in order (same service as self-order, channel `counter`, `created_by` the staff user) and its QRIS charge. `Idempotency-Key` header; 201 for a new order, 200 for a repeat. No open-order cap (BR-11 is per customer device). Optional `recommendationEventIds[]`, as for self-order. |
+| `GET /api/counter/menu` | Staff | Menu for the POS grid and S-08: categories, items with modifier groups, availability, who marked an item sold out by hand (`soldOut` `{byName, at}`) and the ingredients that cannot cover one serving (`stockShort`, names; P2-03), pricing settings and whether manual confirmation needs the owner PIN. Never cached; ignores `ordering_enabled`. |
+| `POST /api/counter/orders` | Staff | Create a walk-in order (same service as self-order, channel `counter`, `created_by` the staff user) and its QRIS charge. `Idempotency-Key` header; 201 for a new order, 200 for a repeat. No open-order cap (BR-11 is per customer device). Optional `recommendationEventIds[]`, as for self-order. The same `ITEM_SOLD_OUT` and `NOT_ENOUGH_STOCK` refusals. |
 | `POST /api/counter/recommendations` | Staff | S-02 suggestion row: the same body and service as `POST /api/public/recommendations`, top suggestion only. Answers go to `POST /api/public/recommendations/events`. |
 | `GET /api/counter/orders/{id}` | Staff | One order for S-04 and S-06: lines, totals, status times, channel, table label, creator, payment (method, status, QR string while pending, reference). |
 | `POST /api/counter/orders/{id}/cancel` | Staff | Cancel an unpaid counter order from S-04 (it becomes `expired`, its charge is cancelled). Any other order is returned unchanged with its status. |
 | `POST /api/counter/orders/{id}/status` | Staff/Barista | `preparing`, `ready`, `completed`, one step forward only. 409 `ORDER_STATUS_CHANGED` (with the current status) if the order already moved. |
 | `POST /api/counter/orders/{id}/manual-payment` | Staff + Elev (if setting) | Confirm a static-QR payment: `reference` (1–64 chars, required), optional `note`, and `elevationId` (scope `manual_payment`) when `manual_payment_requires_owner_pin` is on. Returns the queue number. 409 `ORDER_STATUS_CHANGED` if the order is no longer awaiting payment; an expired order is revived only if its items are still available (else 409 `ITEM_SOLD_OUT`). Writes `payment.manual_confirm` to `audit_logs`. |
 | `POST /api/counter/orders/{id}/void` | Elev | Void with reason (Phase 3). |
-| `POST /api/counter/menu-items/{id}/sold-out` | Staff | Set manual sold-out: `{soldOut: boolean}`. Writes `menu_item.sold_out` or `menu_item.available` to `audit_logs` when the flag changes. The customer menu and checkout read it on every request. |
+| `POST /api/counter/menu-items/{id}/sold-out` | Staff | Set manual sold-out: `{soldOut: boolean}`. Writes `menu_item.sold_out` or `menu_item.available` to `audit_logs` when the flag changes. The customer menu and checkout read it on every request. Only the manual flag: an item sold out by stock stays sold out until a restock covers one serving. |
 | `GET /api/stream/counter` | Staff | SSE: `order` events `{orderId, status, queueNumber}` for new and changed orders, plus one `sync` event once the stream is listening, so a refetch then misses nothing. |
 
 ### Owner
@@ -222,7 +222,7 @@ Built in Phase 1 (P1-13). Owner only; every change checks the origin, runs in on
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /api/owner/menu-items` | Owner | O-03: every category (with item count) and every item, active or not, with `isPromoted` and who marked it sold out. |
+| `GET /api/owner/menu-items` | Owner | O-03: every category (with item count) and every item, active or not, with `isPromoted`, `isAvailable`, who marked it sold out and `stockShort` (ingredients below one serving). |
 | `POST /api/owner/menu-items` | Owner | Create an item: `categoryId`, `name` (1–60), `price` (whole rupiah, 0–10,000,000), optional `description` (≤ 200), `isActive`, `isPromoted`. 201. Audits `menu_item.create`. |
 | `PATCH /api/owner/menu-items/{id}` | Owner | Any subset of those fields (the "Promosikan" switch sends `isPromoted`). Returns `{id, changed}`; audits `menu_item.update` with each changed field's `from` and `to`, only when something changed. Items are never deleted: `isActive: false` hides them. A new price is refused with 409 `PRICE_NEGATIVE` when the item's cheapest allowed option mix would take it below zero. |
 | `POST /api/owner/categories` | Owner | Create a category (`name`, unique ignoring case, else 409 `NAME_TAKEN`); it goes last. Audits `category.create`. |

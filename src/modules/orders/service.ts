@@ -26,11 +26,13 @@ import {
   type PaymentSummary,
   recordSeedPayments,
 } from "@/modules/payments/service";
+import { getStockLevels } from "@/modules/inventory/service";
 import { linkSuggestionEvents } from "@/modules/recommendations/service";
 import { getSettings } from "@/modules/settings/service";
 import { type CsvProblem, readOrderCsv } from "./order-csv";
 import { type CartLine, priceOrder } from "./pricing";
 import * as repo from "./repo";
+import { orderStockNeeds, stockShortfalls } from "./stock";
 import {
   generateSeedOrders,
   ITEM_POPULARITY,
@@ -216,6 +218,21 @@ async function insertOrder(
       throw new AppError("VALIDATION_FAILED", {
         details: { reason: "zero_total" },
       });
+    }
+    // The whole order against current stock (FR-IV-04, Schema §5.1 step 4):
+    // recipe plus chosen option deltas, times quantity. Unpaid orders hold no
+    // stock; it is deducted at payment (BR-05).
+    const stock = await getStockLevels(
+      [...orderStockNeeds(input.items, items).keys()],
+      tx,
+    );
+    const short = stockShortfalls(
+      input.items,
+      items,
+      new Map([...stock].map(([id, level]) => [id, level.stockMilli])),
+    );
+    if (short.length > 0) {
+      throw new AppError("NOT_ENOUGH_STOCK", { details: { items: short } });
     }
 
     const order = await repo.insertOrder(

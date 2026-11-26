@@ -257,6 +257,17 @@ function ItemStatus({
   if (!categoryActive) {
     return <Tag tone="expired">{t("owner.categoryInactive")}</Tag>;
   }
+  // Stock first: the manual switch beside it shows the manual mark.
+  if (item.stockShort.length > 0) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <Tag tone="danger">{t("owner.stockOut")}</Tag>
+        <span className="text-caption text-ink-muted">
+          {item.stockShort.join(", ")}
+        </span>
+      </span>
+    );
+  }
   if (item.soldOut) {
     const { byName, at } = item.soldOut;
     return (

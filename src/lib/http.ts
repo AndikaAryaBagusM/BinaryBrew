@@ -44,6 +44,12 @@ function messageFor(error: AppError): string {
       return t("error.openOrderLimit", { n: Number(details.limit) });
     case "ITEM_SOLD_OUT":
       return t("error.itemSoldOut");
+    case "NOT_ENOUGH_STOCK":
+      return t("error.notEnoughStock", {
+        items: Array.isArray(details.items)
+          ? details.items.map((item: { name: string }) => item.name).join(", ")
+          : "",
+      });
     case "ORDER_STATUS_CHANGED":
       return t("error.orderStatusChanged");
     case "NAME_TAKEN":

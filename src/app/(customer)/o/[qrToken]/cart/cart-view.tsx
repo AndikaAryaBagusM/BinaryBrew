@@ -45,7 +45,10 @@ type Checkout =
       suggestions: SuggestionData[];
       added: ReadonlySet<number>;
     }
-  | { kind: "soldOut"; items: { menuItemId: string; name: string }[] }
+  | {
+      kind: "soldOut" | "notEnough";
+      items: { menuItemId: string; name: string }[];
+    }
   | { kind: "priceChanged"; publicToken: string; total: number }
   | { kind: "error"; message: string };
 
@@ -245,6 +248,11 @@ export function CartView({
       setCheckout({ kind: "soldOut", items: error.details.items });
       return;
     }
+    // Still on the menu, just not this many (FR-IV-04): the lines stay.
+    if (error?.code === "NOT_ENOUGH_STOCK") {
+      setCheckout({ kind: "notEnough", items: error.details.items });
+      return;
+    }
     setCheckout({
       kind: "error",
       message: error?.message ?? t("error.generic"),
@@ -431,6 +439,27 @@ export function CartView({
         >
           <p className="text-body text-ink-muted">
             {t("checkout.soldOutText")}
+          </p>
+          <ul className="mt-2 list-disc pl-5 text-body text-ink">
+            {checkout.items.map((item) => (
+              <li key={item.menuItemId}>{item.name}</li>
+            ))}
+          </ul>
+        </Sheet>
+      )}
+      {checkout.kind === "notEnough" && (
+        <Sheet
+          title={t("checkout.notEnoughTitle")}
+          open
+          onOpenChange={(open) => !open && closeDialog()}
+          actions={
+            <Button onClick={closeDialog}>
+              {t("checkout.changeQuantity")}
+            </Button>
+          }
+        >
+          <p className="text-body text-ink-muted">
+            {t("checkout.notEnoughText")}
           </p>
           <ul className="mt-2 list-disc pl-5 text-body text-ink">
             {checkout.items.map((item) => (
