@@ -152,7 +152,7 @@ test("on a phone, the tabs are the nav sections", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await login(page);
   const tabs = page.getByRole("navigation", { name: "Menu pemilik" });
-  await expect(tabs.getByRole("link")).toHaveText(["Laporan"]);
+  await expect(tabs.getByRole("link")).toHaveText([/Dasbor/, "Laporan"]);
   await expect(tabs.getByRole("button")).toHaveText([
     "Menu",
     "Stok",

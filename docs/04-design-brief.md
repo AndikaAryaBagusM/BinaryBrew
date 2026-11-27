@@ -209,7 +209,7 @@ Two columns: **Sedang disiapkan** (left) and **Siap diambil** (right, larger, br
 
 ### 6.4 Owner
 
-Left navigation (on phones, a bottom tab bar with one tab per section, as in Figma 18:502: Menu, Stok, Laporan, Lainnya; a section with several pages opens a list of them), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
+Left navigation, starting with RINGKASAN › Dasbor (on phones, a bottom tab bar with one tab per section, as in Figma 18:502: Dasbor, Menu, Stok, Laporan, Lainnya; a section with several pages opens a list of them). Dasbor carries a red count badge of low ingredients (read as "n bahan menipis"), kept live by the owner stream (P2-07), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
 
 ## 7. Screen specifications
 
@@ -272,7 +272,7 @@ Left navigation (on phones, a bottom tab bar with one tab per section, as in Fig
 | ID | Layout highlights |
 |---|---|
 | O-01 | Centred card: email, password, "Masuk". Rate-limit message on repeated failures. |
-| O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
+| O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. P2-07 builds the page at `/owner/dashboard` with the "Stok menipis" card only (Figma 18:502): each active ingredient at or below its minimum with "stock · min" ("stock · cek stok fisik" when Minus) and its O-05 chip, Minus first, then Habis, then Menipis; "Semua bahan masih di atas batas minimum." when there are none; "Catat restock" opens O-07. It updates without a reload when a sale makes an ingredient low. Login still lands on O-03 until P3-03 adds the rest. |
 | O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Since P2-06 an HPP column sits between price and status: the current HPP (same rounding as O-06), with "belum lengkap" under it while a recipe ingredient has no cost, and "—" without a recipe; since P2-03 the status shows "Stok habis" with the short ingredients when stock cannot cover one serving; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
 | O-04 | `/owner/modifiers` "Pilihan menu" (P2-02): group cards on the left (rule "Wajib · pilih 1" / "Opsional · maks 2", "dipakai di N menu", a "Tidak mengubah stok" tag when no option has deltas); the chosen group on the right with name, "Aktif" switch, "Minimal pilih" / "Maksimal pilih", an options table (Opsi / Tambahan harga / Pengaruh ke stok (per porsi) / Aktif), "Tambah opsi" opening a side panel with ingredient delta rows (minus = uses less), and read-only "Dipakai di menu" chips. Groups and options are switched off, never deleted. |
 | O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
@@ -542,6 +542,13 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `board.reconnecting` | Menyambung ulang… |
 | `board.more` | +{n} lagi |
 | `owner.lowStock` | Stok menipis |
+| `owner.navSectionSummary` | Ringkasan |
+| `owner.navDashboard` | Dasbor |
+| `owner.lowStockBadge` | {n} bahan menipis |
+| `owner.lowStockLine` | {stock} · min {min} |
+| `owner.lowStockCheck` | {stock} · cek stok fisik |
+| `owner.lowStockNone` | Semua bahan masih di atas batas minimum. |
+| `owner.lowStockRestock` | Catat restock |
 | `owner.noRecipe` | Resep belum ada |
 | `owner.loginTitle` | Masuk sebagai pemilik |
 | `owner.email` | Email |

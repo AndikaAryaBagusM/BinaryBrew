@@ -8,6 +8,7 @@ import { audit } from "@/modules/audit/service";
 import { requireRole, type SessionUser } from "@/modules/auth/service";
 import { logger } from "@/lib/logger";
 import * as repo from "./repo";
+import { compareLow, crossedToLow, type LowStatus, lowStatus } from "./status";
 
 // Ingredients and suppliers (FR-IV-01, O-05). Stock is a ledger: every
 // change to `ingredients.stock_qty` comes with a `stock_movements` row in the
@@ -354,6 +355,19 @@ export async function deductForSale(
       "stock below zero after a sale",
     );
   }
+  // FR-IV-06: the owner hears once when a sale makes an active ingredient low.
+  const crossed = rows
+    .filter(
+      (row) =>
+        row.isActive &&
+        crossedToLow({
+          beforeMilli: toMilli(row.stockQty),
+          afterMilli: toMilli(row.stockQty) - input.needs.get(row.id)!,
+          minMilli: toMilli(row.minStockQty),
+        }),
+    )
+    .map((row) => row.id);
+  if (crossed.length > 0) await repo.notifyStockLow(crossed, db);
   return new Map(rows.map((row) => [row.id, row.avgCost]));
 }
 
@@ -567,4 +581,33 @@ export async function getAverageCosts(
     db,
   );
   return new Map(rows.map((row) => [row.id, row.avgCost]));
+}
+
+// --- Low stock (P2-07, FR-IV-06; O-02 "Stok menipis") ---
+
+export type LowStockItem = {
+  id: string;
+  name: string;
+  unit: IngredientUnit;
+  stockQty: string;
+  minStockQty: string;
+  status: LowStatus;
+};
+
+// Active ingredients at or below their minimum, Minus first, then Habis, then
+// Menipis, each by name. Plain reads, never cached.
+export async function getLowStock(
+  actor: SessionUser | null,
+  db: DbExecutor = getDb(),
+): Promise<LowStockItem[]> {
+  requireRole(actor, ["owner"]);
+  const rows = await repo.selectLowStock(db);
+  return rows
+    .flatMap((row) => {
+      const status = lowStatus(toMilli(row.stockQty), toMilli(row.minStockQty));
+      return status
+        ? [{ ...row, unit: row.unit as IngredientUnit, status }]
+        : [];
+    })
+    .sort(compareLow);
 }

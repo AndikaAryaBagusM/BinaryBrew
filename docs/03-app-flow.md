@@ -300,7 +300,7 @@ flowchart TD
 | `order.completed` | Collected or auto | Board removes number; counter card moves to history |
 | `order.expired` | Sweep | Customer page shows expired state |
 | `order.voided` | Owner void | Counter and status page update; board removes number |
-| `stock.low` | Stock at or below minimum after a sale | Owner dashboard badge |
+| `stock.low` (NOTIFY `stock_events`, P2-07) | A paid sale takes an active ingredient from above its minimum to at or below it (once per crossing, not on every later sale) | `/api/stream/owner`: the owner nav badge on "Dasbor" and the O-02 "Stok menipis" card refresh. A channel of its own, so customer, board and counter streams never carry stock data |
 
 Clients fall back to polling every 10 seconds if the stream is down.
 

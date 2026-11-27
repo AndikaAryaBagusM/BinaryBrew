@@ -126,11 +126,40 @@ export function lockIngredientsForUpdate(ids: string[], db: DbExecutor) {
       id: ingredients.id,
       stockQty: ingredients.stockQty,
       avgCost: ingredients.avgCost,
+      minStockQty: ingredients.minStockQty,
+      isActive: ingredients.isActive,
     })
     .from(ingredients)
     .where(inArray(ingredients.id, ids))
     .orderBy(asc(ingredients.id))
     .for("update");
+}
+
+// FR-IV-06 (P2-07): delivered to stock_events listeners when the transaction
+// commits (inventory/events.ts).
+export async function notifyStockLow(ingredientIds: string[], db: DbExecutor) {
+  await db.execute(
+    sql`select pg_notify('stock_events', ${JSON.stringify({ type: "stock.low", ingredientIds })})`,
+  );
+}
+
+// The same rule as v_low_stock: active and at or below the minimum.
+export function selectLowStock(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: ingredients.id,
+      name: ingredients.name,
+      unit: ingredients.unit,
+      stockQty: ingredients.stockQty,
+      minStockQty: ingredients.minStockQty,
+    })
+    .from(ingredients)
+    .where(
+      and(
+        eq(ingredients.isActive, true),
+        sql`${ingredients.stockQty} <= ${ingredients.minStockQty}`,
+      ),
+    );
 }
 
 // One sale_deduction movement per ingredient of an order, and the matching

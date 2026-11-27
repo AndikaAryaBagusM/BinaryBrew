@@ -2,7 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, type Json } from "@/lib/api-client";
-import type { getOwnerIngredients } from "@/modules/inventory/service";
+import type {
+  getOwnerIngredients,
+  LowStockItem,
+} from "@/modules/inventory/service";
 import type {
   OwnerItemDetails,
   OwnerModifierGroup,
@@ -23,10 +26,18 @@ export const INGREDIENTS_QUERY = ["owner", "ingredients"] as const;
 // O-03 list (with each item's HPP, P2-06): a recipe save refreshes it too.
 export const MENU_QUERY = ["owner", "menu"] as const;
 export const MODIFIER_GROUPS_QUERY = ["owner", "modifier-groups"] as const;
+// O-02 "Stok menipis" and the nav badge (P2-07); the owner stream refreshes it.
+export const LOW_STOCK_QUERY = ["owner", "low-stock"] as const;
+export type LowStockData = { items: Json<LowStockItem>[] };
 export const itemDetailsQuery = (id: string) =>
   ["owner", "menu-item", id] as const;
 
-function useOwnerQuery<T>(key: readonly unknown[], path: string, initial?: T) {
+function useOwnerQuery<T>(
+  key: readonly unknown[],
+  path: string,
+  initial?: T,
+  refetchInterval?: number,
+) {
   const signedOut = useSignedOutGuard();
   return useQuery({
     queryKey: key,
@@ -37,7 +48,17 @@ function useOwnerQuery<T>(key: readonly unknown[], path: string, initial?: T) {
       return result.data;
     },
     ...(initial !== undefined && { initialData: initial }),
+    ...(refetchInterval !== undefined && { refetchInterval }),
   });
+}
+
+export function useLowStock(initial?: LowStockData, refetchInterval?: number) {
+  return useOwnerQuery(
+    LOW_STOCK_QUERY,
+    "/api/owner/low-stock",
+    initial,
+    refetchInterval,
+  );
 }
 
 export function useIngredients(initial?: IngredientsData) {
