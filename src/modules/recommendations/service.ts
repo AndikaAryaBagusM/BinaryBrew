@@ -6,10 +6,10 @@ import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { SHOP_UTC_OFFSET_MINUTES } from "@/lib/time";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
-import { getSuggestionItems } from "@/modules/menu/service";
+import { getItemCosts, getSuggestionItems } from "@/modules/menu/service";
 import { getSettings } from "@/modules/settings/service";
 import * as repo from "./repo";
-import { scoreSuggestions } from "./scoring";
+import { marginShare, scoreSuggestions } from "./scoring";
 
 // The Apriori job (Tech §10, Schema §5.7) is Python in jobs/apriori/, run
 // with its own virtual environment (`npm run reco:setup`). It runs by hand
@@ -206,11 +206,18 @@ export async function suggestItems(
     getSuggestionItems(db),
     repo.selectActiveRules(cart, db),
   ]);
+  // FR-RC-06: the margin boost uses the current HPP (the O-03/O-09 figure).
+  const costs = await getItemCosts(
+    [...new Set(rules.map((rule) => rule.consequentId))],
+    db,
+  );
   const suggestions = scoreSuggestions({
     cart,
     rules,
-    // Margin is neutral until recipes and costs exist (P2-08).
-    items: items.map((item) => ({ ...item, marginPct: 0 })),
+    items: items.map((item) => {
+      const cost = costs.get(item.id);
+      return { ...item, marginPct: cost ? marginShare(item.price, cost) : 0 };
+    }),
     weights: {
       promoteWeight: settings.reco_promote_weight,
       marginWeight: settings.reco_margin_weight,

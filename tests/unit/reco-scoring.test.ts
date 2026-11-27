@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ActiveRule,
   type CandidateItem,
+  marginShare,
   scoreSuggestions,
 } from "@/modules/recommendations/scoring";
 
@@ -197,5 +198,65 @@ describe("scoreSuggestions", () => {
         weights: { ...weights, maxItems: 0 },
       }),
     ).toEqual([]);
+  });
+});
+
+// P2-08 acceptance (FR-RC-06): margin boost from HPP, neutral without a
+// complete recipe.
+describe("marginShare", () => {
+  it.each([
+    [20_000, { status: "complete", hpp: 6_000 } as const, 0.7],
+    [20_000, { status: "complete", hpp: 20_000 } as const, 0],
+    [20_000, { status: "complete", hpp: 25_000 } as const, 0], // a loss
+    [0, { status: "complete", hpp: 1_000 } as const, 0], // free item
+    [20_000, { status: "incomplete", hpp: 6_000 } as const, 0],
+    [20_000, { status: "no_recipe", hpp: null } as const, 0],
+  ])("price %i, %o → %d", (price, cost, share) => {
+    expect(marginShare(price, cost)).toBeCloseTo(share, 10);
+  });
+});
+
+describe("margin boost (FR-RC-06)", () => {
+  const rank = (high: CandidateItem, low: CandidateItem) =>
+    scoreSuggestions({
+      cart: ["kopi"],
+      rules: [
+        rule("r1", ["kopi"], low.id, 0.3),
+        rule("r2", ["kopi"], high.id, 0.3),
+      ],
+      items: [item("kopi"), low, high],
+      weights,
+    });
+
+  it("ranks the higher-margin item above an equal-confidence lower one", () => {
+    // Without the boost the tie would go by name: "a-low" first.
+    const result = rank(
+      item("z-high", {
+        marginPct: marginShare(20_000, { status: "complete", hpp: 6_000 }),
+      }),
+      item("a-low", {
+        marginPct: marginShare(20_000, { status: "complete", hpp: 16_000 }),
+      }),
+    );
+    // 0.3 × (1 + 0.25 × 0.7) = 0.3525; 0.3 × (1 + 0.25 × 0.2) = 0.315
+    expect(result.map((s) => [s.itemId, s.score])).toEqual([
+      ["z-high", expect.closeTo(0.3525, 10)],
+      ["a-low", expect.closeTo(0.315, 10)],
+    ]);
+  });
+
+  it("gives no boost without a recipe or with an incomplete one", () => {
+    const result = rank(
+      item("z-none", {
+        marginPct: marginShare(20_000, { status: "no_recipe", hpp: null }),
+      }),
+      item("a-part", {
+        marginPct: marginShare(20_000, { status: "incomplete", hpp: 1_000 }),
+      }),
+    );
+    expect(result.map((s) => [s.itemId, s.score])).toEqual([
+      ["a-part", 0.3],
+      ["z-none", 0.3],
+    ]);
   });
 });

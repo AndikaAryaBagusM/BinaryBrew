@@ -368,12 +368,12 @@ The thresholds are read from the `settings` table (keys `reco_min_support`, `rec
 
 1. Candidates: active rules whose antecedent is a subset of the cart items.
 2. Remove consequents already in the cart, inactive or unavailable items.
-3. For each candidate: `score = confidence × (1 + promote_weight × is_promoted) × (1 + margin_weight × margin_pct)`, where `margin_pct` is in 0–1 and is 0 if the item has no complete recipe.
+3. For each candidate: `score = confidence × (1 + promote_weight × is_promoted) × (1 + margin_weight × margin_pct)`, where `margin_pct` is in 0–1 and is 0 if the item has no complete recipe. Since P2-08 (FR-RC-06) it is `(price − HPP) ÷ price` from the item's current HPP (`menu.getItemCosts`, the O-03 and O-09 figure), held between 0 and 1: an incomplete recipe (an ingredient without a cost), no recipe, a loss or a free item give 0, a neutral factor, never a penalty.
 4. Keep the best score per consequent; return the top `reco_max_items` (default 2).
 5. If there are no candidates, optionally return one promoted available item; else none.
 6. Log each suggestion as a `recommendation_events` row (`shown`), and later `accepted` or `rejected`. The order links the events of its checkout: the client sends their ids as `recommendationEventIds[]` (at most 20) and the order transaction sets `order_id` on those of the same `clientSession` not yet linked (Schema §5.1).
 
-The score is stored rounded to 4 decimals; a `promoted` fallback has no rule and no score. The margin factor is neutral (0) until recipes and costs exist (P2-08). C-04 asks once per cart visit when "Bayar" is tapped and skips the sheet on an error or after 1.5 s; the Counter asks after each cart change and shows the top suggestion.
+The score is stored rounded to 4 decimals; a `promoted` fallback has no rule and no score. C-04 asks once per cart visit when "Bayar" is tapped and skips the sheet on an error or after 1.5 s; the Counter asks after each cart change and shows the top suggestion.
 
 **Running it:** once, `npm run reco:setup` creates the virtual environment `jobs/apriori/.venv` (Python 3.13) and installs the pinned packages (docs/versions.md). `npm run reco:run` then runs `jobs/apriori/run.py` with it against `DATABASE_URL` and prints the run, the basket count (and how many are seeded) and the top rules by lift. The worker also starts it between 03:00 and 04:00 Asia/Jakarta if the machine is on, once per night and only when no run (also a manual one) has started since 03:00; the outcome goes to the worker log. Only one run at a time (advisory lock); a second one reports `already_running`. The job is deterministic for the same data, so results can be reproduced in the demo. The database driver is pg8000 (pure Python).
 
