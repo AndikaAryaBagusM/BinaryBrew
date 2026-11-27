@@ -1112,6 +1112,23 @@ export async function getOrderableItems(
   }));
 }
 
+// Payment (P2-04): the current recipe of each given item, one serving, read
+// inside the caller's transaction. Items without a recipe are left out.
+export async function getRecipes(
+  itemIds: readonly string[],
+  db: DbExecutor,
+): Promise<Map<string, RecipeLine[]>> {
+  const rows = await admin.selectRecipes([...new Set(itemIds)], db);
+  const recipes = new Map<string, RecipeLine[]>();
+  for (const row of rows) {
+    recipes.set(row.menuItemId, [
+      ...(recipes.get(row.menuItemId) ?? []),
+      { ingredientId: row.ingredientId, qty: normalizedQty(row.qty) },
+    ]);
+  }
+  return recipes;
+}
+
 // Order history (FR-RC-07): every menu item with its current price, active or
 // not, and the active QR codes.
 export function getItemCatalog(db: DbExecutor = getDb()) {

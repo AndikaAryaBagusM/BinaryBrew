@@ -114,6 +114,54 @@ export async function lockIngredient(id: string, db: DbExecutor) {
   return row;
 }
 
+// Sale deduction (P2-04): the ingredients an order uses, locked for update in
+// id order after the order row (Schema §5 lock order), so parallel payments
+// queue instead of deadlocking.
+export function lockIngredientsForUpdate(ids: string[], db: DbExecutor) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: ingredients.id,
+      stockQty: ingredients.stockQty,
+      avgCost: ingredients.avgCost,
+    })
+    .from(ingredients)
+    .where(inArray(ingredients.id, ids))
+    .orderBy(asc(ingredients.id))
+    .for("update");
+}
+
+// One sale_deduction movement per ingredient of an order, and the matching
+// change to stock_qty (Schema §4 I7). System rows: created_by is null.
+export async function insertSaleDeductions(
+  orderId: string,
+  rows: { ingredientId: string; qtyDelta: string }[],
+  now: Date,
+  db: DbExecutor,
+) {
+  if (rows.length === 0) return;
+  await db.insert(stockMovements).values(
+    rows.map((row) => ({
+      ingredientId: row.ingredientId,
+      type: "sale_deduction" as const,
+      qtyDelta: row.qtyDelta,
+      refType: "order",
+      refId: orderId,
+      createdBy: null,
+      createdAt: now,
+    })),
+  );
+  for (const row of rows) {
+    await db
+      .update(ingredients)
+      .set({
+        stockQty: sql`${ingredients.stockQty} + ${row.qtyDelta}::numeric`,
+        updatedAt: now,
+      })
+      .where(eq(ingredients.id, row.ingredientId));
+  }
+}
+
 // Availability (P2-03): current stock of the given ingredients, unlocked.
 export function selectStockLevels(ids: string[], db: DbExecutor = getDb()) {
   if (ids.length === 0) return Promise.resolve([]);

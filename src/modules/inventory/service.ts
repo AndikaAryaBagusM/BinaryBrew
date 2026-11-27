@@ -5,6 +5,7 @@ import { unitCostFromTotal } from "@/lib/money";
 import { fromMilli, toMilli } from "@/lib/quantity";
 import { audit } from "@/modules/audit/service";
 import { requireRole, type SessionUser } from "@/modules/auth/service";
+import { logger } from "@/lib/logger";
 import * as repo from "./repo";
 
 // Ingredients and suppliers (FR-IV-01, O-05). Stock is a ledger: every
@@ -312,4 +313,45 @@ export async function getStockLevels(
       { name: row.name, stockMilli: toMilli(row.stockQty) },
     ]),
   );
+}
+
+// Payment (P2-04, FR-IV-03, BR-05; orders module, inside the mark-paid
+// transaction): takes what a paid order needs, in thousandths per ingredient,
+// out of stock. One sale_deduction movement per ingredient, so stock_qty stays
+// equal to the ledger (I7). Stock may go below zero: the sale already
+// happened. O-05 shows it as "Minus"; it is also logged. Returns the current
+// average cost of each ingredient, for the order lines' unit_cogs.
+export async function deductForSale(
+  input: { orderId: string; needs: ReadonlyMap<string, number>; now: Date },
+  db: DbExecutor,
+): Promise<Map<string, string>> {
+  const wanted = [...input.needs].filter(([, milli]) => milli > 0);
+  const rows = await repo.lockIngredientsForUpdate(
+    wanted.map(([id]) => id).filter((id) => UUID.test(id)),
+    db,
+  );
+  const found = new Map(rows.map((row) => [row.id, row]));
+  const missing = wanted.filter(([id]) => !found.has(id)).map(([id]) => id);
+  if (missing.length > 0) {
+    // Ingredients are never deleted, so only a hand-edited snapshot gets here.
+    logger.error(
+      { orderId: input.orderId, ingredientIds: missing },
+      "sale deduction skipped unknown ingredients",
+    );
+  }
+  const deductions = rows.map((row) => ({
+    ingredientId: row.id,
+    qtyDelta: fromMilli(-input.needs.get(row.id)!),
+  }));
+  await repo.insertSaleDeductions(input.orderId, deductions, input.now, db);
+  const negative = rows
+    .filter((row) => toMilli(row.stockQty) - input.needs.get(row.id)! < 0)
+    .map((row) => row.id);
+  if (negative.length > 0) {
+    logger.warn(
+      { orderId: input.orderId, ingredientIds: negative },
+      "stock below zero after a sale",
+    );
+  }
+  return new Map(rows.map((row) => [row.id, row.avgCost]));
 }

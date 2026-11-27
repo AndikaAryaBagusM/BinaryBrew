@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   lineStockNeeds,
   orderStockNeeds,
+  scaleNeeds,
   type StockItem,
   stockShortfalls,
+  unitStockNeeds,
 } from "@/modules/orders/stock";
 
 // P2-03 (FR-IV-04, Schema §5.1 step 4): what an order takes from stock.
@@ -180,5 +182,35 @@ describe("stockShortfalls", () => {
         new Map([...stock, ["beans", -5000]]),
       ),
     ).toEqual([{ menuItemId: "americano", name: "Americano" }]);
+  });
+});
+
+describe("unitStockNeeds (payment, P2-04)", () => {
+  it("adds a snapshot of deltas to the recipe and drops what is not needed", () => {
+    expect(
+      unitStockNeeds(latte.recipe, [
+        { ingredientId: "beans", qtyDelta: "9.000" },
+        { ingredientId: "oat", qtyDelta: "150.000" },
+        { ingredientId: "milk", qtyDelta: "-150.000" },
+      ]),
+    ).toEqual(
+      new Map([
+        ["beans", 27_000],
+        ["cup", 1000],
+        ["oat", 150_000],
+      ]),
+    );
+  });
+
+  it("needs only the deltas for an item without a recipe", () => {
+    expect(
+      unitStockNeeds([], [{ ingredientId: "ice", qtyDelta: "50.000" }]),
+    ).toEqual(new Map([["ice", 50_000]]));
+  });
+
+  it("scales a unit need by the quantity", () => {
+    expect(scaleNeeds(new Map([["beans", 18_000]]), 20)).toEqual(
+      new Map([["beans", 360_000]]),
+    );
   });
 });

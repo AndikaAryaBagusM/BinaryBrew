@@ -128,32 +128,43 @@ export default async function globalSetup() {
       },
     ]);
 
-    // P2-03 availability specs: Es krim vanila below one Affogato (80 g) and
-    // Cokelat bubuk for two Es Cokelat (25 g each). Written as waste
-    // movements, so stock_qty still equals the ledger (Schema §4 I7).
-    const setStock = async (name: string, target: number) => {
-      const [row] = await db
-        .select({
-          id: schema.ingredients.id,
-          stockQty: schema.ingredients.stockQty,
-        })
-        .from(schema.ingredients)
-        .where(eq(schema.ingredients.name, name));
+    // Stock the specs rely on, written as count_adjustment movements so
+    // stock_qty still equals the ledger (Schema §4 I7); average costs stay.
+    // Paid orders deduct stock (P2-04), so every ingredient gets plenty,
+    // except: Es krim vanila below one Affogato (80 g) and Cokelat bubuk for
+    // two Es Cokelat (25 g each) for the P2-03 availability specs, and Matcha
+    // bubuk as seeded (no spec orders Matcha Latte) for owner-ingredients.
+    const PLENTY = 1_000_000;
+    const targets = new Map([
+      ["Es krim vanila", 50],
+      ["Cokelat bubuk", 60],
+      ["Matcha bubuk", null],
+    ]);
+    const stock = await db
+      .select({
+        id: schema.ingredients.id,
+        name: schema.ingredients.name,
+        stockQty: schema.ingredients.stockQty,
+      })
+      .from(schema.ingredients);
+    for (const row of stock) {
+      const target = targets.has(row.name) ? targets.get(row.name) : PLENTY;
+      if (target === null || target === undefined) continue;
+      const delta = target - Number(row.stockQty);
+      if (delta === 0) continue;
       await db.transaction(async (tx) => {
         await tx.insert(schema.stockMovements).values({
-          ingredientId: row!.id,
-          type: "waste",
-          qtyDelta: String(target - Number(row!.stockQty)),
-          note: "e2e: availability",
+          ingredientId: row.id,
+          type: "count_adjustment",
+          qtyDelta: String(delta),
+          note: "e2e: stock for the specs",
         });
         await tx
           .update(schema.ingredients)
           .set({ stockQty: String(target) })
-          .where(eq(schema.ingredients.id, row!.id));
+          .where(eq(schema.ingredients.id, row.id));
       });
-    };
-    await setStock("Es krim vanila", 50);
-    await setStock("Cokelat bubuk", 60);
+    }
 
     const [qr] = await db
       .select({ token: schema.qrTokens.token })
