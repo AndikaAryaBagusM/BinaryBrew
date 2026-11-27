@@ -4,6 +4,7 @@ import {
   Boxes,
   Coffee,
   LogOut,
+  PackagePlus,
   Settings,
   SlidersHorizontal,
   Users,
@@ -18,10 +19,16 @@ import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 
 // Only the pages that exist are listed; the rest of the Figma nav (Dasbor,
-// Restock, laporan, …) arrives with their tasks.
+// Stock opname, laporan, …) arrives with their tasks.
 const sections: {
   label: MessageKey;
-  links: { href: string; label: MessageKey; icon: typeof Coffee }[];
+  // shortLabel: the phone tab, where six links share the width.
+  links: {
+    href: string;
+    label: MessageKey;
+    shortLabel?: MessageKey;
+    icon: typeof Coffee;
+  }[];
 }[] = [
   {
     label: "owner.navSectionMenu",
@@ -30,6 +37,7 @@ const sections: {
       {
         href: "/owner/modifiers",
         label: "owner.navModifiers",
+        shortLabel: "owner.navModifiersShort",
         icon: SlidersHorizontal,
       },
     ],
@@ -40,15 +48,27 @@ const sections: {
       {
         href: "/owner/ingredients",
         label: "owner.navIngredients",
+        shortLabel: "owner.navIngredientsShort",
         icon: Boxes,
       },
+      { href: "/owner/restock", label: "owner.navRestock", icon: PackagePlus },
     ],
   },
   {
     label: "owner.navSectionOperations",
     links: [
-      { href: "/owner/users", label: "owner.navUsers", icon: Users },
-      { href: "/owner/settings", label: "owner.navSettings", icon: Settings },
+      {
+        href: "/owner/users",
+        label: "owner.navUsers",
+        shortLabel: "owner.navUsersShort",
+        icon: Users,
+      },
+      {
+        href: "/owner/settings",
+        label: "owner.navSettings",
+        shortLabel: "owner.navSettingsShort",
+        icon: Settings,
+      },
     ],
   },
 ];
@@ -143,7 +163,7 @@ export function OwnerNav({ name }: { name: string }) {
         aria-label={t("owner.navLabel")}
         className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        {links.map(({ href, label, icon: Icon }) => (
+        {links.map(({ href, label, shortLabel, icon: Icon }) => (
           <Link
             key={href}
             href={href}
@@ -154,7 +174,7 @@ export function OwnerNav({ name }: { name: string }) {
             )}
           >
             <Icon aria-hidden="true" size={22} />
-            {t(label)}
+            {t(shortLabel ?? label)}
           </Link>
         ))}
       </nav>

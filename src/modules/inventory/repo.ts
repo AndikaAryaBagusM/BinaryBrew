@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
-import { ingredients, stockMovements, suppliers } from "@/db/schema";
+import { ingredients, restocks, stockMovements, suppliers } from "@/db/schema";
 
 // SQL only; shaping and rules live in service.ts.
 
@@ -93,9 +93,11 @@ export async function insertIngredient(
 export async function insertStockMovement(
   values: {
     ingredientId: string;
-    type: "opening";
+    type: "opening" | "restock";
     qtyDelta: string;
     note: string | null;
+    refType?: string;
+    refId?: string;
     createdBy: string;
     now: Date;
   },
@@ -160,6 +162,74 @@ export async function insertSaleDeductions(
       })
       .where(eq(ingredients.id, row.ingredientId));
   }
+}
+
+// Restock (P2-05): the purchased ingredients, locked for update in id order
+// (Schema §5 lock order) so parallel restocks and payments queue.
+export function lockIngredientsForRestock(ids: string[], db: DbExecutor) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: ingredients.id,
+      name: ingredients.name,
+      unit: ingredients.unit,
+      isActive: ingredients.isActive,
+      stockQty: ingredients.stockQty,
+      avgCost: ingredients.avgCost,
+    })
+    .from(ingredients)
+    .where(inArray(ingredients.id, ids))
+    .orderBy(asc(ingredients.id))
+    .for("update");
+}
+
+export async function insertRestock(
+  values: {
+    ingredientId: string;
+    supplierId: string | null;
+    quantity: string;
+    totalCost: number;
+    purchasedOn: string;
+    createdBy: string;
+    now: Date;
+  },
+  db: DbExecutor,
+) {
+  const { now, ...row } = values;
+  const [created] = await db
+    .insert(restocks)
+    .values({ ...row, createdAt: now })
+    .returning({ id: restocks.id });
+  return created!;
+}
+
+// Stock and average cost together; the caller holds the row lock and has
+// written the matching ledger row.
+export async function setStockAndCost(
+  id: string,
+  values: { stockQty: string; avgCost: string },
+  now: Date,
+  db: DbExecutor,
+) {
+  await db
+    .update(ingredients)
+    .set({ ...values, updatedAt: now })
+    .where(eq(ingredients.id, id));
+}
+
+// S-09 / O-07 pickers: active ingredients with stock and cost, by name.
+export function selectActiveIngredients(db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: ingredients.id,
+      name: ingredients.name,
+      unit: ingredients.unit,
+      stockQty: ingredients.stockQty,
+      avgCost: ingredients.avgCost,
+    })
+    .from(ingredients)
+    .where(eq(ingredients.isActive, true))
+    .orderBy(asc(ingredients.name));
 }
 
 // Availability (P2-03): current stock of the given ingredients, unlocked.
@@ -227,6 +297,30 @@ export async function selectAllSuppliers(db: DbExecutor = getDb()) {
     .select(supplierColumns)
     .from(suppliers)
     .orderBy(asc(suppliers.name));
+}
+
+export function selectActiveSuppliers(db: DbExecutor = getDb()) {
+  return db
+    .select({ id: suppliers.id, name: suppliers.name })
+    .from(suppliers)
+    .where(eq(suppliers.isActive, true))
+    .orderBy(asc(suppliers.name));
+}
+
+// Restock (P2-05): the suppliers a save names, share-locked so one cannot be
+// switched off until it commits.
+export function lockSuppliersForShare(ids: string[], db: DbExecutor) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({
+      id: suppliers.id,
+      name: suppliers.name,
+      isActive: suppliers.isActive,
+    })
+    .from(suppliers)
+    .where(inArray(suppliers.id, ids))
+    .orderBy(asc(suppliers.id))
+    .for("share");
 }
 
 export async function lockSupplierNames(db: DbExecutor) {

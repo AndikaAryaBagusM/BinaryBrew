@@ -214,6 +214,8 @@ Auth column: **Public** (no login), **Token** (random link token), **Staff** (an
 | `POST /api/counter/orders/{id}/manual-payment` | Staff + Elev (if setting) | Confirm a static-QR payment: `reference` (1–64 chars, required), optional `note`, and `elevationId` (scope `manual_payment`) when `manual_payment_requires_owner_pin` is on. Returns the queue number. 409 `ORDER_STATUS_CHANGED` if the order is no longer awaiting payment; an expired order is revived only if its items are still available (else 409 `ITEM_SOLD_OUT`). Writes `payment.manual_confirm` to `audit_logs`. |
 | `POST /api/counter/orders/{id}/void` | Elev | Void with reason (Phase 3). |
 | `POST /api/counter/menu-items/{id}/sold-out` | Staff | Set manual sold-out: `{soldOut: boolean}`. Writes `menu_item.sold_out` or `menu_item.available` to `audit_logs` when the flag changes. The customer menu and checkout read it on every request. Only the manual flag: an item sold out by stock stays sold out until a restock covers one serving. |
+| `GET /api/counter/restock-options` | Staff (not Barista) | S-09 and O-07 pickers: active ingredients (`id`, `name`, `unit`, `stockQty`, `avgCost`, for the preview) and active suppliers (`id`, `name`). Never cached. |
+| `POST /api/counter/restocks` | Staff (not Barista) | S-09 and O-07 (P2-05): `lines[]` (1–20) of `ingredientId`, `quantity` (> 0, up to 3 decimals), `totalCost` (whole rupiah, 0–100,000,000), optional `supplierId` and `purchasedOn` (`YYYY-MM-DD`, default today in the shop's calendar, never later). One transaction (Schema §5.5); the owner uses it too. 201 with each line's `avgCostBefore`, `avgCostAfter` and new `stockQty`. 400 `VALIDATION_FAILED` with `reason` `inactive_ingredient`, `inactive_supplier` or `future_date`. Audits `restock.create` per line (average and stock `from`/`to`). |
 | `GET /api/stream/counter` | Staff | SSE: `order` events `{orderId, status, queueNumber}` for new and changed orders, plus one `sync` event once the stream is listening, so a refetch then misses nothing. |
 
 ### Owner
@@ -254,7 +256,7 @@ Later phases:
 | Area | Endpoints (all Owner unless noted) |
 |---|---|
 | Menu | CRUD `/api/owner/categories`, `/menu-items`, `/modifier-groups`, `/modifier-options`; `PUT /menu-items/{id}/recipe`; promote flag via menu item update |
-| Inventory | `POST /restocks` (Staff allowed); `POST /stock-counts` (Elev `stock_adjustment`) |
+| Inventory | `POST /stock-counts` (Elev `stock_adjustment`). Restocks are built (P2-05) as `POST /api/counter/restocks`, above. |
 | Orders | `GET /orders`, `POST /orders/{id}/refund-processed` (Elev) |
 | Reports | `GET /reports/sales`, `/best-sellers`, `/peak-hours`, `/hpp`, `/stock-variance`, `/recommendations` |
 | System | `GET/PUT /settings`; users and devices CRUD; `POST /qr-tokens/{id}/rotate`; `GET /audit-logs`; `POST /reco/run` (Phase 3) |

@@ -55,3 +55,25 @@ export const supplierPatch = z
   .strictObject({ name, note, isActive: z.boolean() })
   .partial()
   .refine((patch) => Object.keys(patch).length > 0, "empty patch");
+
+// S-09 and O-07 (FR-IV-05): one or more purchases saved together. The total
+// is what was paid for the whole quantity; it may be 0 (a free delivery).
+// The purchase date defaults to today and may not be in the future (checked
+// by the service, in the shop's time zone).
+export const MAX_RESTOCK_LINES = 20;
+export const MAX_RESTOCK_TOTAL = 100_000_000;
+
+export const restockBody = z.strictObject({
+  lines: z
+    .array(
+      z.strictObject({
+        ingredientId: z.uuid(),
+        quantity: quantity.refine((value) => Number(value) > 0, "must be > 0"),
+        totalCost: z.int().min(0).max(MAX_RESTOCK_TOTAL),
+        supplierId: z.uuid().nullable().default(null),
+        purchasedOn: z.iso.date().nullable().default(null),
+      }),
+    )
+    .min(1)
+    .max(MAX_RESTOCK_LINES),
+});

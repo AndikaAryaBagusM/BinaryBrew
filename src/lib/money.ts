@@ -133,13 +133,57 @@ export function unitCostFromTotal(
       `quantity must be a positive safe integer, got ${quantityMilli}`,
     );
   }
-  const numerator = BigInt(totalCost) * big(1000) * COST_SCALE;
-  const denominator = BigInt(quantityMilli);
+  return costText(
+    BigInt(totalCost) * big(1000) * COST_SCALE,
+    BigInt(quantityMilli),
+  );
+}
+
+// numerator / denominator (both non-negative) rounded half-up, as an
+// avg_cost string with 4 decimals.
+function costText(numerator: bigint, denominator: bigint): string {
   let scaled = numerator / denominator;
   if ((numerator % denominator) * big(2) >= denominator) scaled += big(1);
   const whole = scaled / COST_SCALE;
   const fraction = String(scaled % COST_SCALE).padStart(4, "0");
   return `${whole}.${fraction}`;
+}
+
+// Restock (FR-IV-05, BR-09, Schema §5.5): the weighted average of the stock
+// on hand at its current cost and the purchase at what was paid for it,
+// rounded half-up to 4 decimals once. Stock at or below zero counts as none,
+// so the purchase price becomes the average. The exact total is used, not the
+// rounded unit price. Quantities are thousandths of a unit (lib/quantity.ts).
+export function weightedAverageCost(
+  current: { stockMilli: number; avgCost: string },
+  purchase: { quantityMilli: number; totalCost: number },
+): string {
+  assertAmount(purchase.totalCost, "total cost");
+  if (
+    !Number.isSafeInteger(purchase.quantityMilli) ||
+    purchase.quantityMilli <= 0
+  ) {
+    throw new RangeError(
+      `quantity must be a positive safe integer, got ${purchase.quantityMilli}`,
+    );
+  }
+  if (!Number.isSafeInteger(current.stockMilli)) {
+    throw new RangeError(`stock must be a safe integer`);
+  }
+  const base = big(Math.max(current.stockMilli, 0));
+  return costText(
+    base * costScaled(current.avgCost) +
+      BigInt(purchase.totalCost) * big(1000) * COST_SCALE,
+    base + BigInt(purchase.quantityMilli),
+  );
+}
+
+// -1, 0 or 1: how the new average compares with the old one (O-07 "naik
+// dari", "turun dari", "tetap").
+export function compareCost(a: string, b: string): -1 | 0 | 1 {
+  const left = costScaled(a);
+  const right = costScaled(b);
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 // True when the cost is zero: O-05 shows "Biaya belum ada".

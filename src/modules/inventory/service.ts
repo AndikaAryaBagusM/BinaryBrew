@@ -1,8 +1,9 @@
 import { type DbExecutor, getDb } from "@/db/client";
 import { changedFields } from "@/lib/changes";
 import { AppError } from "@/lib/errors";
-import { unitCostFromTotal } from "@/lib/money";
+import { unitCostFromTotal, weightedAverageCost } from "@/lib/money";
 import { fromMilli, toMilli } from "@/lib/quantity";
+import { businessDate } from "@/lib/time";
 import { audit } from "@/modules/audit/service";
 import { requireRole, type SessionUser } from "@/modules/auth/service";
 import { logger } from "@/lib/logger";
@@ -354,4 +355,203 @@ export async function deductForSale(
     );
   }
   return new Map(rows.map((row) => [row.id, row.avgCost]));
+}
+
+// --- Restock (P2-05, FR-IV-05, BR-09; S-09 and O-07) ---
+
+export const RESTOCK_ROLES = ["owner", "staff"] as const;
+
+export type RestockOptions = {
+  ingredients: {
+    id: string;
+    name: string;
+    unit: IngredientUnit;
+    stockQty: string;
+    avgCost: string;
+  }[];
+  suppliers: { id: string; name: string }[];
+};
+
+// What S-09 and O-07 pick from: active ingredients with their current stock
+// and average cost (for the preview) and active suppliers.
+export async function getRestockOptions(
+  actor: SessionUser | null,
+): Promise<RestockOptions> {
+  requireRole(actor, RESTOCK_ROLES);
+  const [ingredients, suppliers] = await Promise.all([
+    repo.selectActiveIngredients(),
+    repo.selectActiveSuppliers(),
+  ]);
+  return {
+    ingredients: ingredients.map((row) => ({
+      ...row,
+      unit: row.unit as IngredientUnit,
+    })),
+    suppliers,
+  };
+}
+
+export type RestockLine = {
+  ingredientId: string;
+  quantity: string;
+  totalCost: number;
+  supplierId: string | null;
+  purchasedOn: string | null; // "YYYY-MM-DD"; null = today
+};
+
+export type RecordedRestock = {
+  id: string;
+  ingredientId: string;
+  avgCostBefore: string;
+  avgCostAfter: string;
+  stockQty: string;
+};
+
+// Records purchases (Schema §5.5) in one transaction: per line a restocks
+// row, a restock movement (stock_qty stays equal to the ledger, I7) and the
+// new weighted-average cost. Lines apply in order, so an ingredient bought
+// twice averages twice. Ingredients are locked in id order, then the named
+// suppliers share-locked. Every ingredient and supplier must be active; the
+// purchase date may not be after today in the shop's calendar.
+export async function recordRestocks(
+  actor: SessionUser | null,
+  input: { lines: readonly RestockLine[] },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ restocks: RecordedRestock[] }> {
+  const user = requireRole(actor, RESTOCK_ROLES);
+  const today = businessDate(now, "00:00");
+  const late = input.lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.purchasedOn !== null && line.purchasedOn > today)
+    .map(({ index }) => `lines.${index}.purchasedOn`);
+  if (late.length > 0) {
+    throw new AppError("VALIDATION_FAILED", {
+      details: { reason: "future_date", fields: late },
+    });
+  }
+
+  return getDb().transaction(async (tx) => {
+    const ingredientIds = [
+      ...new Set(input.lines.map((line) => line.ingredientId)),
+    ];
+    const rows = await repo.lockIngredientsForRestock(ingredientIds, tx);
+    const found = new Map(rows.map((row) => [row.id, row]));
+    const badIngredients = ingredientIds.filter(
+      (id) => !found.get(id)?.isActive,
+    );
+    if (badIngredients.length > 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: {
+          reason: "inactive_ingredient",
+          ingredientIds: badIngredients,
+        },
+      });
+    }
+    const supplierIds = [
+      ...new Set(
+        input.lines.flatMap((line) =>
+          line.supplierId ? [line.supplierId] : [],
+        ),
+      ),
+    ];
+    const suppliers = new Map(
+      (await repo.lockSuppliersForShare(supplierIds, tx)).map((row) => [
+        row.id,
+        row,
+      ]),
+    );
+    const badSuppliers = supplierIds.filter(
+      (id) => !suppliers.get(id)?.isActive,
+    );
+    if (badSuppliers.length > 0) {
+      throw new AppError("VALIDATION_FAILED", {
+        details: { reason: "inactive_supplier", supplierIds: badSuppliers },
+      });
+    }
+
+    const state = new Map(
+      rows.map((row) => [
+        row.id,
+        { stockMilli: toMilli(row.stockQty), avgCost: row.avgCost },
+      ]),
+    );
+    const recorded: RecordedRestock[] = [];
+    for (const line of input.lines) {
+      const ingredient = found.get(line.ingredientId)!;
+      const before = state.get(line.ingredientId)!;
+      const quantityMilli = toMilli(line.quantity);
+      const quantity = fromMilli(quantityMilli);
+      const after = {
+        stockMilli: before.stockMilli + quantityMilli,
+        avgCost: weightedAverageCost(before, {
+          quantityMilli,
+          totalCost: line.totalCost,
+        }),
+      };
+      const purchasedOn = line.purchasedOn ?? today;
+      const { id } = await repo.insertRestock(
+        {
+          ingredientId: line.ingredientId,
+          supplierId: line.supplierId,
+          quantity,
+          totalCost: line.totalCost,
+          purchasedOn,
+          createdBy: user.userId,
+          now,
+        },
+        tx,
+      );
+      await repo.insertStockMovement(
+        {
+          ingredientId: line.ingredientId,
+          type: "restock",
+          qtyDelta: quantity,
+          note: null,
+          refType: "restock",
+          refId: id,
+          createdBy: user.userId,
+          now,
+        },
+        tx,
+      );
+      const stockQty = fromMilli(after.stockMilli);
+      await repo.setStockAndCost(
+        line.ingredientId,
+        { stockQty, avgCost: after.avgCost },
+        now,
+        tx,
+      );
+      await audit(
+        {
+          action: "restock.create",
+          actor: user,
+          entity: { type: "restock", id },
+          metadata: {
+            ingredientId: line.ingredientId,
+            name: ingredient.name,
+            quantity,
+            unit: ingredient.unit,
+            totalCost: line.totalCost,
+            supplierId: line.supplierId,
+            supplier: line.supplierId
+              ? suppliers.get(line.supplierId)!.name
+              : null,
+            purchasedOn,
+            avgCost: { from: before.avgCost, to: after.avgCost },
+            stockQty: { from: fromMilli(before.stockMilli), to: stockQty },
+          },
+        },
+        { db: tx, now },
+      );
+      state.set(line.ingredientId, after);
+      recorded.push({
+        id,
+        ingredientId: line.ingredientId,
+        avgCostBefore: before.avgCost,
+        avgCostAfter: after.avgCost,
+        stockQty,
+      });
+    }
+    return { restocks: recorded };
+  });
 }

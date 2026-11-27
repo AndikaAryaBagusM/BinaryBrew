@@ -209,7 +209,7 @@ Two columns: **Sedang disiapkan** (left) and **Siap diambil** (right, larger, br
 
 ### 6.4 Owner
 
-Left navigation (collapses to a bottom tab bar on phones), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
+Left navigation (collapses to a bottom tab bar on phones, with short labels: Pilihan, Bahan, Pengguna, Setelan), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
 
 ## 7. Screen specifications
 
@@ -259,7 +259,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 
 **S-08 Sold-out panel.** Searchable list of menu items with a switch each; items that are sold out because of low stock show a lock icon and "Stok habis (otomatis)" with the short ingredients. The switch only sets the manual mark: it cannot make a stock sold-out item available (a restock does), so it is disabled unless a manual mark is left to clear (P2-03).
 
-**S-09 Quick restock.** Ingredient picker, quantity, total price, optional supplier; shows the new weighted-average cost after saving.
+**S-09 Quick restock.** "Restock" in the Counter header (staff and owner; hidden for baristas) opens a drawer: ingredient picker ("Susu UHT (ml)"), quantity, total price, optional supplier. An info box previews the new weighted-average cost, the previous one and the stock it leaves before saving; after saving, a confirmation shows the stored average and the Counter menu refetches (a restock can end an automatic sold-out).
 
 **S-10 Kitchen display.** Only the queue column of S-02 at larger type, no menu or cart.
 
@@ -277,7 +277,7 @@ Left navigation (collapses to a bottom tab bar on phones), content area with pag
 | O-04 | `/owner/modifiers` "Pilihan menu" (P2-02): group cards on the left (rule "Wajib · pilih 1" / "Opsional · maks 2", "dipakai di N menu", a "Tidak mengubah stok" tag when no option has deltas); the chosen group on the right with name, "Aktif" switch, "Minimal pilih" / "Maksimal pilih", an options table (Opsi / Tambahan harga / Pengaruh ke stok (per porsi) / Aktif), "Tambah opsi" opening a side panel with ingredient delta rows (minus = uses less), and read-only "Dipakai di menu" chips. Groups and options are switched off, never deleted. |
 | O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
 | O-06 | The O-03 edit panel, titled with the item name, gets tabs Detail / Resep / Pilihan (P2-02). Resep: cards Harga jual / HPP / Margin (green, red when negative), a table Bahan / Jumlah / Biaya/unit / Biaya with a delete button per line, "Tambah bahan", a blue row and notice for an ingredient with no cost yet (counted as 0), and "Simpan resep". HPP and margin are computed live from the current average costs (`src/lib/money.ts`). Pilihan: tick and order the groups the item offers; "Simpan pilihan". A new item gets these tabs after it is saved. |
-| O-07 | Multi-row entry: ingredient, quantity, total price, supplier, date; shows the new average cost per row before saving. |
+| O-07 | Multi-row entry (up to 20): ingredient, quantity, total price, supplier, date (default today, never later); shows the new average cost per row before saving with "naik dari …", "turun dari …", "tetap" (equal as shown) or "biaya pertama"; a later row of the same ingredient starts from the earlier one. "Total pembelian" and "Simpan n restock" below. Errors list "Baris n: …" above the table. |
 | O-08 | One row per ingredient with system quantity, counted quantity input, difference, reason selector (required when different). Owner PIN on save. |
 | O-09 | Table: item, price, HPP, margin, margin %, flag for low margin; items without a recipe show "Resep belum ada". |
 | O-10 | Table and a simple trend per ingredient; highlights the largest variances. |
@@ -397,6 +397,8 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.nameTaken` | Nama ini sudah dipakai. Pilih nama lain. |
 | `error.unitLocked` | Satuan tidak bisa diubah: bahan ini sudah punya riwayat stok atau dipakai di resep. |
 | `error.priceNegative` | Harga jadi minus untuk: {items}. Naikkan harga menu atau kurangi potongan opsi. |
+| `error.inactiveChoice` | Ada bahan atau pemasok yang sudah nonaktif. Pilih lagi dari daftar. |
+| `error.futureDate` | Tanggal beli tidak boleh setelah hari ini. |
 | `error.tooManyDefaults` | Opsi default lebih banyak dari batas maksimal pilih grup ini. |
 | `error.tooFewOptions` | Grup wajib ini butuh opsi aktif sebanyak minimal pilih, karena sudah dipakai di menu. |
 | `auth.loginFailed` | Email atau kata sandi salah |
@@ -511,6 +513,22 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.searchLabel` | Cari menu |
 | `counter.searchPlaceholder` | Ketik nama menu… |
 | `counter.searchEmpty` | Tidak ada menu yang cocok. |
+| `counter.restockButton` | Restock |
+| `counter.restockTitle` | Catat restock |
+| `counter.restockHelp` | Catat bahan yang baru diterima. Stok dan biaya rata-rata langsung diperbarui. |
+| `counter.restockIngredient` | Bahan |
+| `counter.restockPickIngredient` | Pilih bahan |
+| `counter.restockQuantity` | Jumlah diterima |
+| `counter.restockTotal` | Total harga dibayar |
+| `counter.restockSupplier` | Pemasok (opsional) |
+| `counter.restockNoSupplier` | Tanpa pemasok |
+| `counter.restockPreviewTitle` | Biaya rata-rata baru |
+| `counter.restockPreviewDetail` | Sebelumnya {cost} / {unit} · stok jadi {qty} {unit} · HPP menu yang memakai bahan ini ikut diperbarui |
+| `counter.restockPreviewFirst` | Biaya pertama untuk bahan ini · stok jadi {qty} {unit} · HPP menu yang memakai bahan ini ikut diperbarui |
+| `counter.restockSave` | Simpan restock |
+| `counter.restockSaved` | Restock {name} tersimpan. Biaya rata-rata sekarang {cost} / {unit}. |
+| `counter.restockIngredientRequired` | Pilih bahan yang diterima. |
+| `counter.restockEmpty` | Belum ada bahan aktif. Pemilik menambahkannya di Bahan & stok. |
 | `counter.available` | Tersedia |
 | `counter.markedSoldOutBy` | Ditandai habis oleh {name}, {time} |
 | `counter.markedSoldOut` | Ditandai habis |
@@ -585,6 +603,11 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.categoryActive` | Kategori {name} aktif |
 | `owner.navSectionStock` | Stok |
 | `owner.navIngredients` | Bahan & stok |
+| `owner.navRestock` | Restock |
+| `owner.navModifiersShort` | Pilihan |
+| `owner.navIngredientsShort` | Bahan |
+| `owner.navUsersShort` | Pengguna |
+| `owner.navSettingsShort` | Setelan |
 | `owner.ingredientsTitle` | Bahan & stok |
 | `owner.ingredientsSubtitle` | Stok dihitung dari resep setiap pesanan dibayar. |
 | `owner.ingredientsEmpty` | Belum ada bahan. Tambahkan bahan pertama. |
@@ -655,6 +678,30 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.addLine` | Tambah |
 | `owner.noCostTitle` | {name} belum punya biaya |
 | `owner.noCostBody` | HPP dihitung tanpa bahan ini sampai ada restock dengan harga. Margin mungkin sedikit lebih rendah. |
+| `owner.restockTitle` | Restock |
+| `owner.restockSubtitle` | Catat bahan yang baru dibeli. Biaya rata-rata dihitung otomatis. |
+| `owner.colTotalCost` | Total harga |
+| `owner.colSupplier` | Pemasok |
+| `owner.colDate` | Tanggal |
+| `owner.colNewAvgCost` | Biaya rata-rata baru |
+| `owner.restockField` | {field}, baris {n} |
+| `owner.restockPickIngredient` | Pilih bahan |
+| `owner.restockNoSupplier` | Tanpa pemasok |
+| `owner.restockIngredientOption` | {name} ({unit}) |
+| `owner.restockCost` | {cost} / {unit} |
+| `owner.restockUp` | naik dari {cost} |
+| `owner.restockDown` | turun dari {cost} |
+| `owner.restockSame` | tetap |
+| `owner.restockFirst` | biaya pertama |
+| `owner.restockRemoveRow` | Hapus baris {n} |
+| `owner.restockAddRow` | Tambah baris |
+| `owner.restockTotal` | Total pembelian |
+| `owner.restockSave` | Simpan {n} restock |
+| `owner.restockSaved` | {n} restock tersimpan. Stok dan biaya rata-rata sudah diperbarui. |
+| `owner.restockIngredientRequired` | Pilih bahan |
+| `owner.restockDateInvalid` | Tanggal tidak boleh setelah hari ini |
+| `owner.restockRowError` | Baris {n}: {message} |
+| `owner.restockEmpty` | Belum ada bahan aktif. Tambahkan dulu di Bahan & stok. |
 | `owner.saveRecipe` | Simpan resep |
 | `owner.recipeSaved` | Resep tersimpan. |
 | `owner.groupsHelp` | Centang grup pilihan yang ditawarkan menu ini. Urutannya sama dengan yang dilihat pelanggan. |
