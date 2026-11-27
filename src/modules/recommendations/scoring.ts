@@ -9,8 +9,19 @@ export type ActiveRule = {
   lift: number;
 };
 
+// FR-RC-06 (P2-08): the margin share behind the margin boost, in 0–1, from
+// the item's HPP (menu getItemCosts). Neutral (0) unless the recipe is
+// complete; a loss or a free item is 0 too, never a penalty.
+export function marginShare(
+  price: number,
+  cost: { status: "complete" | "incomplete" | "no_recipe"; hpp: number | null },
+): number {
+  if (cost.status !== "complete" || cost.hpp === null || price <= 0) return 0;
+  return Math.min(1, Math.max(0, (price - cost.hpp) / price));
+}
+
 // Active items of active categories, in menu order. marginPct is in 0–1 and
-// 0 for an item without a complete recipe.
+// 0 for an item without a complete recipe (marginShare).
 export type CandidateItem = {
   id: string;
   name: string;
