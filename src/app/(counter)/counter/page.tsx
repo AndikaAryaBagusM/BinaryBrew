@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { QueryProvider } from "@/components/query-provider";
 import { getEnv } from "@/lib/env";
 import { sessionFromCookies } from "@/modules/auth/server";
+import { RESTOCK_ROLES } from "@/modules/inventory/service";
 import { getCounterMenu } from "@/modules/menu/service";
 import { listCounterQueue } from "@/modules/orders/service";
 import type { CounterMenuData } from "./api";
@@ -37,7 +38,13 @@ async function Counter() {
   return (
     <QueryProvider>
       <CounterScreen
-        user={{ name: session.name, sessionId: session.sessionId }}
+        user={{
+          name: session.name,
+          sessionId: session.sessionId,
+          canRestock: (RESTOCK_ROLES as readonly string[]).includes(
+            session.role,
+          ),
+        }}
         initial={initial}
         initialMenu={initialMenu}
         mockPay={getEnv().PAYMENT_PROVIDER === "mock"}

@@ -26,6 +26,7 @@ export const auditActions = [
   "payment.manual_confirm",
   "recipe.update",
   "refund.request",
+  "restock.create",
   "setting.update",
   "supplier.create",
   "supplier.update",

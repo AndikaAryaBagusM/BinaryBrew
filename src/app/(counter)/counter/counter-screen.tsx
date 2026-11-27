@@ -6,6 +6,7 @@ import {
   BellRing,
   ChevronDown,
   Lock,
+  PackagePlus,
   Users,
   Volume2,
   VolumeX,
@@ -33,6 +34,7 @@ import { formatTime } from "@/lib/time";
 import { useEventStream } from "@/lib/use-event-stream";
 import { api, type CounterMenuData, type CounterMenuItemData } from "./api";
 import { AvailabilityPanel } from "./availability-panel";
+import { RestockPanel } from "./restock-panel";
 import { type Charge, ChargeDialog, counterOrderKey } from "./charge-dialog";
 import { clearCounterCart } from "./counter-cart";
 import { CustomizeDialog } from "./customize-dialog";
@@ -110,7 +112,7 @@ export function CounterScreen({
   initialMenu,
   mockPay,
 }: {
-  user: { name: string; sessionId: string };
+  user: { name: string; sessionId: string; canRestock: boolean };
   initial: CounterOrderData[];
   initialMenu: CounterMenuData;
   mockPay: boolean;
@@ -133,6 +135,7 @@ export function CounterScreen({
   const [charge, setCharge] = useState<Charge | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(false);
   const pos = useRef<PosPanelHandle>(null);
 
   // Orders already on screen; anything else in a fetch is an arrival.
@@ -323,6 +326,17 @@ export function CounterScreen({
             <Ban aria-hidden="true" size={22} />
             {t("counter.soldOutButton")}
           </button>
+          {/* S-09: staff and the owner record deliveries (PRD §4). */}
+          {user.canRestock && (
+            <button
+              type="button"
+              onClick={() => setRestockOpen(true)}
+              className="focus-ring flex h-14 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-5 text-counter-label text-ink active:bg-accent-soft"
+            >
+              <PackagePlus aria-hidden="true" size={22} />
+              {t("counter.restockButton")}
+            </button>
+          )}
           {newest ? (
             <button
               type="button"
@@ -519,6 +533,13 @@ export function CounterScreen({
           menu={menu}
           onChanged={refreshMenu}
           onClose={() => setAvailabilityOpen(false)}
+          onSignedOut={goToLogin}
+        />
+      )}
+      {!locked && restockOpen && (
+        <RestockPanel
+          onSaved={refreshMenu}
+          onClose={() => setRestockOpen(false)}
           onSignedOut={goToLogin}
         />
       )}

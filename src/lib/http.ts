@@ -25,6 +25,14 @@ function messageFor(error: AppError): string {
       return t("counter.locked", { minutes });
     }
     case "VALIDATION_FAILED":
+      // Restock refusals (P2-05) the screens can explain.
+      if (
+        details.reason === "inactive_ingredient" ||
+        details.reason === "inactive_supplier"
+      ) {
+        return t("error.inactiveChoice");
+      }
+      if (details.reason === "future_date") return t("error.futureDate");
       return t("error.validation");
     case "UNAUTHENTICATED":
       return t("auth.signInRequired");

@@ -618,7 +618,7 @@ having i.stock_qty <> coalesce(sum(m.qty_delta), 0);
 
 ## 5. Transaction recipes
 
-All multi-step changes happen inside one database transaction. Lock rows in a fixed order (orders first, then ingredients sorted by id) to avoid deadlocks.
+All multi-step changes happen inside one database transaction. Lock rows in a fixed order (orders first, then ingredients sorted by id, then suppliers) to avoid deadlocks.
 
 ### 5.1 Create order (self-order or counter)
 
@@ -663,10 +663,12 @@ For each purchased ingredient:
 
 ```
 base_qty = greatest(ingredient.stock_qty, 0)
-new_avg  = (base_qty * ingredient.avg_cost + quantity * unit_cost) / (base_qty + quantity)
+new_avg  = (base_qty * ingredient.avg_cost + total_cost) / (base_qty + quantity)
 ```
 
-Insert the `restocks` row and a `restock` movement, update `stock_qty` and `avg_cost`. Because `base_qty` is never negative, a negative stock balance does not distort the average (BR-09).
+The exact `total_cost` is used, not the rounded `unit_cost`; `new_avg` is rounded half-up to 4 decimals once (`weightedAverageCost` in `src/lib/money.ts`). Insert the `restocks` row and a `restock` movement (`ref_type` `restock`, `ref_id` the restock id, `created_by` the user), update `stock_qty` and `avg_cost`. Because `base_qty` is never negative, a negative stock balance does not distort the average (BR-09): at zero or below, the purchase price becomes the average.
+
+P2-05 (`inventory.recordRestocks`, S-09 and O-07): one save of 1–20 lines is one transaction. Lock the ingredients `for update` in id order, then share-lock the named suppliers; every ingredient and supplier must be active. Lines apply in order, so an ingredient on two lines averages twice. `purchased_on` defaults to today in the shop's calendar (Asia/Jakarta, not the business day) and may not be later. Each line writes `restock.create` to `audit_logs`. The screens preview the same calculation (`src/modules/inventory/restock-preview.ts`) before saving.
 
 ### 5.6 Stock count (Phase 3)
 
