@@ -555,3 +555,16 @@ export async function recordRestocks(
     return { restocks: recorded };
   });
 }
+
+// HPP (P2-06, menu module): the current weighted-average cost of the given
+// ingredients, as stored ("285.0000"). Plain reads.
+export async function getAverageCosts(
+  ids: readonly string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, string>> {
+  const rows = await repo.selectAverageCosts(
+    [...new Set(ids)].filter((id) => UUID.test(id)),
+    db,
+  );
+  return new Map(rows.map((row) => [row.id, row.avgCost]));
+}

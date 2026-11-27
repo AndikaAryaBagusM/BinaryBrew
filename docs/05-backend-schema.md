@@ -530,6 +530,8 @@ $$;
 
 -- HPP per menu item from recipes and weighted-average ingredient cost.
 -- has_recipe is false when the item has no recipe lines (HPP unknown, not zero).
+-- For ad-hoc SQL only: the app computes HPP in src/modules/menu/cost.ts with
+-- the src/lib/money.ts rounding (P2-06), so O-03, O-06, O-09 and unit_cogs agree.
 create view v_menu_item_cost as
 select
   m.id as menu_item_id,
@@ -637,7 +639,7 @@ All multi-step changes happen inside one database transaction. Lock rows in a fi
 3. If the order is `awaiting_payment`: continue. If `expired`: re-check availability; if available, revive (continue), else set the payment `paid`, insert a `refunds` row (`requested`, reason "paid after expiry, item unavailable") and alert the owner (PRD FR-PM-07). If the payment is already `paid` or `refunded`, or the order is paid or later: do nothing (outcome `already_paid`, logged as a warning). The system-created refund has `requested_by` null and writes an `audit_logs` row `refund.request` with a null actor; until the owner dashboard lists open refunds, the alert is a warning log.
 4. Update `payments` to `paid` with `paid_at`.
 5. `queue_number = next_queue_number(business_date)`, using the order's own business day (also when a late payment revives it); update order to `paid`, set `paid_at`.
-6. (Phase 2, P2-04) Stock and cost, in `orders.markOrderPaid`, so every paid path (webhook, late-payment revival, manual confirmation) deducts and nothing else does. Each line needs, per ingredient, the item's current recipe plus the `ingredient_deltas` snapshotted on its modifiers, never below zero for that line (the §5.1 step 4 rule, `src/modules/orders/stock.ts`), times the line quantity. Lock the ingredients `for update` in id order (after the order, the payment and the queue counter), insert one `sale_deduction` movement per ingredient for the whole order (`ref_type` `order`, `ref_id` the order id, `created_by` null) and add the same amount to `ingredients.stock_qty`. Stock may go below zero (BR-05); that is logged and shows as "Minus" on O-05. `order_items.unit_cogs` = Σ per-unit need × current `avg_cost`, rounded half-up once (`src/lib/money.ts`); an ingredient without a cost counts as 0, and an item without a recipe gets null. Seeded and imported orders (§7) are history: they never deduct and keep `unit_cogs` null.
+6. (Phase 2, P2-04) Stock and cost, in `orders.markOrderPaid`, so every paid path (webhook, late-payment revival, manual confirmation) deducts and nothing else does. Each line needs, per ingredient, the item's current recipe plus the `ingredient_deltas` snapshotted on its modifiers, never below zero for that line (the §5.1 step 4 rule, `src/modules/orders/stock.ts`), times the line quantity. Lock the ingredients `for update` in id order (after the order, the payment and the queue counter), insert one `sale_deduction` movement per ingredient for the whole order (`ref_type` `order`, `ref_id` the order id, `created_by` null) and add the same amount to `ingredients.stock_qty`. Stock may go below zero (BR-05); that is logged and shows as "Minus" on O-05. `order_items.unit_cogs` = Σ per-unit need × current `avg_cost`, rounded half-up once (`src/lib/money.ts`); an ingredient without a cost counts as 0, and an item without a recipe gets null. Seeded and imported orders (§7) are history: they never deduct stock; since P2-06 each line's `unit_cogs` is the item's HPP from its current recipe and average costs when the order is inserted (history has no options; null without a recipe), so O-09 has costs for past months.
 7. Write `audit_logs` for manual confirmations. Emit `NOTIFY order_events` after commit.
 
 Manual confirmation (S-05, FR-PM-05) follows the same steps from step 2, with these differences: it needs `awaiting_payment`, or `expired` with every item still available (otherwise it is refused with `ITEM_SOLD_OUT`, and no refund is created because no money moved through the system); when the setting asks for it, the owner elevation is consumed inside the transaction; the order's pending `qris_dynamic` payment is set `expired` and a new `qris_static_manual` payment is inserted as `paid` with the staff's reference. After commit the dynamic charge is cancelled at the provider.
@@ -713,19 +715,21 @@ group by 1
 order by 1;
 ```
 
-Margin per item (HPP report):
+Margin per item (HPP report, O-09, P2-06) is computed in the app, not with `v_menu_item_cost`: HPP = Σ recipe qty × `avg_cost`, rounded half-up once (`src/lib/money.ts`); an ingredient without a cost counts as 0 and marks the item incomplete; no recipe means no HPP. Margin % is in tenths of a percent, rounded half-up away from zero; an item is low when that is below `low_margin_threshold_pct`. The view stays for ad-hoc SQL.
+
+Sales per item for a period (O-09 "Penjualan per periode", from the HPP stored at payment):
 
 ```sql
-select m.id, m.name, m.price,
-       c.has_recipe,
-       c.hpp,
-       case when c.has_recipe then m.price - c.hpp end as margin,
-       case when c.has_recipe and m.price > 0
-            then round(((m.price - c.hpp) / m.price * 100)::numeric, 1) end as margin_pct
-from menu_items m
-join v_menu_item_cost c on c.menu_item_id = m.id
-where m.is_active
-order by margin_pct nulls last;
+select oi.menu_item_id,
+       sum(oi.quantity) as quantity,
+       sum(oi.line_total) as revenue,
+       coalesce(sum(oi.unit_cogs * oi.quantity), 0) as cogs,
+       coalesce(sum(oi.quantity) filter (where oi.unit_cogs is null), 0) as uncosted_quantity
+from order_items oi
+join orders o on o.id = oi.order_id
+where o.paid_at is not null and o.status <> 'voided'
+  and o.business_date between $1 and $2
+group by oi.menu_item_id;
 ```
 
 Stock variance per count (theoretical vs actual):

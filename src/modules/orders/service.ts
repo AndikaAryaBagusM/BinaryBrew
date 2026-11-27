@@ -13,6 +13,7 @@ import {
 } from "@/modules/auth/service";
 import {
   getItemCatalog,
+  getItemCosts,
   getOrderableItems,
   getRecipes,
   listActiveQrCodes,
@@ -740,6 +741,32 @@ export async function advanceOrderStatus(
   });
 }
 
+// HPP report (P2-06, FR-HP-04; reports module): what each item sold between
+// two business dates (inclusive) in paid orders that were not voided.
+// Revenue is the line totals; HPP is unit_cogs × quantity over the lines that
+// have it, and uncostedQuantity counts the portions without one.
+export type ItemSales = {
+  menuItemId: string;
+  quantity: number;
+  revenue: number;
+  cogs: number;
+  uncostedQuantity: number;
+};
+
+export function getSalesByItem(
+  range: { from: string; to: string },
+  db: DbExecutor = getDb(),
+): Promise<ItemSales[]> {
+  return repo.selectSalesByItem(range, db);
+}
+
+// The business date of the oldest paid order, or null when there is none.
+export async function getFirstSaleDate(
+  db: DbExecutor = getDb(),
+): Promise<string | null> {
+  return repo.selectFirstSaleDate(db);
+}
+
 // Order history (FR-RC-07, docs/06 §7): demo orders from the seed generator
 // and orders imported from the old POS. Both are completed, paid orders
 // flagged is_seed; their client_session tells them apart and makes a rerun
@@ -768,7 +795,14 @@ type PastOrder = Omit<
 
 // Queue numbers continue the counter of each business day in payment order
 // (BR-04); days are taken oldest first, so counter rows lock in a fixed order.
+// History has no options, so each line's unit_cogs is the item's HPP from its
+// current recipe and average costs (P2-06), null without a recipe. Stock is
+// not deducted: these sales happened before stock was tracked.
 async function insertPastOrders(list: PastOrder[], db: DbExecutor) {
+  const costs = await getItemCosts(
+    [...new Set(list.flatMap((order) => order.lines.map((l) => l.menuItemId)))],
+    db,
+  );
   const days = new Map<string, PastOrder[]>();
   const byPayment = [...list].sort(
     (a, b) => a.paidAt.getTime() - b.paidAt.getTime(),
@@ -795,6 +829,7 @@ async function insertPastOrders(list: PastOrder[], db: DbExecutor) {
           unitPrice: line.unitPrice,
           quantity: line.quantity,
           lineTotal: line.unitPrice * line.quantity,
+          unitCogs: costs.get(line.menuItemId)?.hpp ?? null,
         })),
       );
     }

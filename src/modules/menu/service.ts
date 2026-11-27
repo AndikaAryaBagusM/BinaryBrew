@@ -8,7 +8,11 @@ import {
   requireRole,
   type SessionUser,
 } from "@/modules/auth/service";
-import { getStockLevels, useIngredients } from "@/modules/inventory/service";
+import {
+  getAverageCosts,
+  getStockLevels,
+  useIngredients,
+} from "@/modules/inventory/service";
 import {
   cheapestUnitPrice,
   type PricingGroup,
@@ -18,6 +22,7 @@ import {
 } from "@/modules/orders/pricing";
 import { getSettings } from "@/modules/settings/service";
 import * as admin from "./admin-repo";
+import { type ItemCost, itemCost } from "./cost";
 import * as repo from "./repo";
 
 // Public menu for a table or entrance QR code (FR-CO-01, FR-CO-02, FR-CO-07).
@@ -302,6 +307,8 @@ export type OwnerMenuItem = {
   isAvailable: boolean;
   soldOut: CounterMenuItem["soldOut"];
   stockShort: string[];
+  // P2-06: HPP from the current recipe and average costs (menu/cost.ts).
+  cost: ItemCost;
 };
 
 export type OwnerMenu = {
@@ -317,13 +324,14 @@ export async function getOwnerMenu(
     repo.selectAllCategories(),
     repo.selectAllItems(),
   ]);
-  const [marks, short] = await Promise.all([
+  const [marks, short, costs] = await Promise.all([
     latestAuditByEntity(
       "menu_item",
       items.filter((item) => item.manualSoldOut).map((item) => item.id),
       SOLD_OUT_ACTIONS,
     ),
     stockShortages(items.map((item) => item.id)),
+    getItemCosts(items.map((item) => item.id)),
   ]);
   const counts = groupBy(items, (item) => item.categoryId);
   return {
@@ -337,6 +345,7 @@ export async function getOwnerMenu(
       ...item,
       soldOut: manualSoldOut ? soldOutMark(marks.get(item.id)) : null,
       stockShort: short.get(item.id) ?? [],
+      cost: costs.get(item.id)!,
     })),
   };
 }
@@ -1127,6 +1136,25 @@ export async function getRecipes(
     ]);
   }
   return recipes;
+}
+
+// HPP (P2-06, FR-HP-01; O-03, O-09 and the order-history unit_cogs): each
+// given item's cost from its current recipe and average costs. Every id gets
+// an entry; one without a recipe is "no_recipe" with a null HPP.
+export async function getItemCosts(
+  itemIds: readonly string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, ItemCost>> {
+  const recipes = await getRecipes(itemIds, db);
+  const avgCosts = await getAverageCosts(
+    [...recipes.values()].flatMap((lines) =>
+      lines.map((line) => line.ingredientId),
+    ),
+    db,
+  );
+  return new Map(
+    itemIds.map((id) => [id, itemCost(recipes.get(id) ?? [], avgCosts)]),
+  );
 }
 
 // Order history (FR-RC-07): every menu item with its current price, active or

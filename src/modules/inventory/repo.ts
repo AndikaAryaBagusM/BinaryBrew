@@ -232,6 +232,15 @@ export function selectActiveIngredients(db: DbExecutor = getDb()) {
     .orderBy(asc(ingredients.name));
 }
 
+// HPP (P2-06): current average cost of the given ingredients, unlocked.
+export function selectAverageCosts(ids: string[], db: DbExecutor = getDb()) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({ id: ingredients.id, avgCost: ingredients.avgCost })
+    .from(ingredients)
+    .where(inArray(ingredients.id, ids));
+}
+
 // Availability (P2-03): current stock of the given ingredients, unlocked.
 export function selectStockLevels(ids: string[], db: DbExecutor = getDb()) {
   if (ids.length === 0) return Promise.resolve([]);

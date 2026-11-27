@@ -4,7 +4,10 @@ import {
   Boxes,
   Coffee,
   LogOut,
+  type LucideIcon,
+  Menu,
   PackagePlus,
+  Percent,
   Settings,
   SlidersHorizontal,
   Users,
@@ -13,71 +16,73 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { BrandWordmark } from "@/components/brand-wordmark";
+import { Modal } from "@/components/modal";
 import { type MessageKey, t } from "@/i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 
 // Only the pages that exist are listed; the rest of the Figma nav (Dasbor,
-// Stock opname, laporan, …) arrives with their tasks.
+// Stock opname, other reports, …) arrives with their tasks. On a phone the
+// bottom tabs are the sections (Figma 18:502: Menu, Stok, Laporan, Lainnya);
+// a section with one page opens it, one with more lists its pages.
+type NavLink = { href: string; label: MessageKey; icon: LucideIcon };
 const sections: {
   label: MessageKey;
-  // shortLabel: the phone tab, where six links share the width.
-  links: {
-    href: string;
-    label: MessageKey;
-    shortLabel?: MessageKey;
-    icon: typeof Coffee;
-  }[];
+  tab: MessageKey;
+  icon: LucideIcon;
+  links: NavLink[];
 }[] = [
   {
     label: "owner.navSectionMenu",
+    tab: "owner.navSectionMenu",
+    icon: Coffee,
     links: [
       { href: "/owner/menu", label: "owner.navMenu", icon: Coffee },
       {
         href: "/owner/modifiers",
         label: "owner.navModifiers",
-        shortLabel: "owner.navModifiersShort",
         icon: SlidersHorizontal,
       },
     ],
   },
   {
     label: "owner.navSectionStock",
+    tab: "owner.navSectionStock",
+    icon: Boxes,
     links: [
       {
         href: "/owner/ingredients",
         label: "owner.navIngredients",
-        shortLabel: "owner.navIngredientsShort",
         icon: Boxes,
       },
       { href: "/owner/restock", label: "owner.navRestock", icon: PackagePlus },
     ],
   },
   {
-    label: "owner.navSectionOperations",
+    label: "owner.navSectionReports",
+    tab: "owner.navSectionReports",
+    icon: Percent,
     links: [
-      {
-        href: "/owner/users",
-        label: "owner.navUsers",
-        shortLabel: "owner.navUsersShort",
-        icon: Users,
-      },
-      {
-        href: "/owner/settings",
-        label: "owner.navSettings",
-        shortLabel: "owner.navSettingsShort",
-        icon: Settings,
-      },
+      { href: "/owner/reports/hpp", label: "owner.navHpp", icon: Percent },
+    ],
+  },
+  {
+    label: "owner.navSectionOperations",
+    tab: "owner.navMore",
+    icon: Menu,
+    links: [
+      { href: "/owner/users", label: "owner.navUsers", icon: Users },
+      { href: "/owner/settings", label: "owner.navSettings", icon: Settings },
     ],
   },
 ];
-const links = sections.flatMap((section) => section.links);
 
 export function OwnerNav({ name }: { name: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
+  const [openSection, setOpenSection] = useState<MessageKey | null>(null);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
@@ -163,21 +168,73 @@ export function OwnerNav({ name }: { name: string }) {
         aria-label={t("owner.navLabel")}
         className="fixed inset-x-0 bottom-0 z-30 grid auto-cols-fr grid-flow-col border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
-        {links.map(({ href, label, shortLabel, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={isActive(href) ? "page" : undefined}
-            className={cn(
-              "focus-ring flex h-16 flex-col items-center justify-center gap-1 px-1 text-center text-caption",
-              isActive(href) ? "font-semibold text-brand" : "text-ink-muted",
-            )}
-          >
-            <Icon aria-hidden="true" size={22} />
-            {t(shortLabel ?? label)}
-          </Link>
-        ))}
+        {sections.map((section) => {
+          const active = section.links.some((link) => isActive(link.href));
+          const Icon = section.icon;
+          const tabClass = cn(
+            "focus-ring flex h-16 cursor-pointer flex-col items-center justify-center gap-1 px-1 text-center text-caption",
+            active ? "font-semibold text-brand" : "text-ink-muted",
+          );
+          const content = (
+            <>
+              <Icon aria-hidden="true" size={22} />
+              {t(section.tab)}
+            </>
+          );
+          return section.links.length === 1 ? (
+            <Link
+              key={section.label}
+              href={section.links[0]!.href}
+              aria-current={active ? "page" : undefined}
+              className={tabClass}
+            >
+              {content}
+            </Link>
+          ) : (
+            <button
+              key={section.label}
+              type="button"
+              aria-haspopup="dialog"
+              aria-current={active ? "page" : undefined}
+              onClick={() => setOpenSection(section.label)}
+              className={tabClass}
+            >
+              {content}
+            </button>
+          );
+        })}
       </nav>
+      {sections
+        .filter((section) => section.label === openSection)
+        .map((section) => (
+          <Modal
+            key={section.label}
+            title={t(section.tab)}
+            width="w-100"
+            onClose={() => setOpenSection(null)}
+          >
+            <ul className="flex flex-col gap-1 px-4 pt-3 pb-5">
+              {section.links.map(({ href, label, icon: Icon }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    aria-current={isActive(href) ? "page" : undefined}
+                    onClick={() => setOpenSection(null)}
+                    className={cn(
+                      "focus-ring flex h-14 items-center gap-3 rounded-card px-3 text-owner-body",
+                      isActive(href)
+                        ? "bg-accent-soft font-semibold text-brand"
+                        : "text-ink active:bg-surface-sunken",
+                    )}
+                  >
+                    <Icon aria-hidden="true" size={22} />
+                    {t(label)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Modal>
+        ))}
     </>
   );
 }
