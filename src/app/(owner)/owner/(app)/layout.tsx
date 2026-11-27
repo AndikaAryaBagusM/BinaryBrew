@@ -24,13 +24,13 @@ async function Shell({ children }: { children: ReactNode }) {
   const session = await sessionFromCookies();
   if (session?.role !== "owner") return children;
   return (
-    <div className="flex min-h-dvh bg-bg">
-      <OwnerNav name={session.name} />
-      <QueryProvider>
+    <QueryProvider>
+      <div className="flex min-h-dvh bg-bg">
+        <OwnerNav name={session.name} />
         <div className="min-w-0 flex-1 pt-14 pb-20 lg:pt-0 lg:pb-0">
           {children}
         </div>
-      </QueryProvider>
-    </div>
+      </div>
+    </QueryProvider>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   Coffee,
+  LayoutDashboard,
   LogOut,
   type LucideIcon,
   Menu,
@@ -21,18 +23,39 @@ import { type MessageKey, t } from "@/i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
+import { useEventStream } from "@/lib/use-event-stream";
+import { LOW_STOCK_QUERY, useLowStock } from "./owner-queries";
 
-// Only the pages that exist are listed; the rest of the Figma nav (Dasbor,
-// Stock opname, other reports, …) arrives with their tasks. On a phone the
-// bottom tabs are the sections (Figma 18:502: Menu, Stok, Laporan, Lainnya);
-// a section with one page opens it, one with more lists its pages.
-type NavLink = { href: string; label: MessageKey; icon: LucideIcon };
+// Only the pages that exist are listed; the rest of the Figma nav (Stock
+// opname, other reports, …) arrives with their tasks. On a phone the bottom
+// tabs are the sections (Figma 18:502: Dasbor, Menu, Stok, Laporan, Lainnya);
+// a section with one page opens it, one with more lists its pages. Dasbor
+// carries the low-stock count (P2-07), kept live by the owner stream.
+type NavLink = {
+  href: string;
+  label: MessageKey;
+  icon: LucideIcon;
+  lowStockBadge?: true;
+};
 const sections: {
   label: MessageKey;
   tab: MessageKey;
   icon: LucideIcon;
   links: NavLink[];
 }[] = [
+  {
+    label: "owner.navSectionSummary",
+    tab: "owner.navDashboard",
+    icon: LayoutDashboard,
+    links: [
+      {
+        href: "/owner/dashboard",
+        label: "owner.navDashboard",
+        icon: LayoutDashboard,
+        lowStockBadge: true,
+      },
+    ],
+  },
   {
     label: "owner.navSectionMenu",
     tab: "owner.navSectionMenu",
@@ -86,6 +109,17 @@ export function OwnerNav({ name }: { name: string }) {
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
+  // A sale that makes an ingredient low arrives at once; polling is the
+  // safety net, faster while the stream is down.
+  const queryClient = useQueryClient();
+  const { lost } = useEventStream(
+    "/api/stream/owner",
+    ["stock", "sync"],
+    () => void queryClient.invalidateQueries({ queryKey: LOW_STOCK_QUERY }),
+  );
+  const lowStock = useLowStock(undefined, lost ? 10_000 : 60_000);
+  const lowCount = lowStock.data?.items.length ?? 0;
+
   async function logout() {
     setLeaving(true);
     await api("/api/auth/logout", { method: "POST" });
@@ -121,7 +155,7 @@ export function OwnerNav({ name }: { name: string }) {
             <p className="px-3 pt-3 pb-1 text-caption font-medium text-ink-muted uppercase">
               {t(section.label)}
             </p>
-            {section.links.map(({ href, label, icon: Icon }) => (
+            {section.links.map(({ href, label, icon: Icon, lowStockBadge }) => (
               <Link
                 key={href}
                 href={href}
@@ -135,6 +169,9 @@ export function OwnerNav({ name }: { name: string }) {
               >
                 <Icon aria-hidden="true" size={20} />
                 {t(label)}
+                {lowStockBadge && (
+                  <CountBadge count={lowCount} className="ml-auto" />
+                )}
               </Link>
             ))}
           </div>
@@ -175,9 +212,18 @@ export function OwnerNav({ name }: { name: string }) {
             "focus-ring flex h-16 cursor-pointer flex-col items-center justify-center gap-1 px-1 text-center text-caption",
             active ? "font-semibold text-brand" : "text-ink-muted",
           );
+          const badge = section.links.some((link) => link.lowStockBadge);
           const content = (
             <>
-              <Icon aria-hidden="true" size={22} />
+              <span className="relative">
+                <Icon aria-hidden="true" size={22} />
+                {badge && (
+                  <CountBadge
+                    count={lowCount}
+                    className="absolute -top-1.5 left-4"
+                  />
+                )}
+              </span>
               {t(section.tab)}
             </>
           );
@@ -236,5 +282,27 @@ export function OwnerNav({ name }: { name: string }) {
           </Modal>
         ))}
     </>
+  );
+}
+
+// The number of low ingredients; read out as "n bahan menipis".
+function CountBadge({
+  count,
+  className,
+}: {
+  count: number;
+  className?: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-caption leading-none font-semibold text-on-brand tabular-nums",
+        className,
+      )}
+    >
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">{t("owner.lowStockBadge", { n: count })}</span>
+    </span>
   );
 }

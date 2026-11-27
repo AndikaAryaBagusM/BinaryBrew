@@ -171,7 +171,7 @@ The test for P1-15 asserts that each planted rule appears with confidence within
 | P2-04 | **Stock deduction at payment:** `sale_deduction` movements in the mark-paid transaction, negative stock allowed and flagged, `unit_cogs` snapshot | FR-IV-03, FR-HP-03, BR-05; Schema §5.2 | L | P2-03, P1-07 | 50 parallel paid orders leave `stock_qty` equal to the ledger sum; deduction never happens for unpaid or expired orders |
 | P2-05 | **Restock entry (O-07, S-09)** and weighted-average cost | FR-IV-05, BR-09; Schema §5.5 | M | P2-01 | Unit tests for average cost including zero and negative starting stock; new average shown before saving |
 | P2-06 | **HPP and margin:** HPP computed in the app (`src/modules/menu/cost.ts`; `v_menu_item_cost` stays for ad-hoc SQL), HPP in O-03, margin in O-06, O-09 report with period sales and CSV, low-margin flag, `unit_cogs` for seeded and imported history | FR-HP-01, 02, 04 | M | P2-02, P2-05 | Report equals a hand-calculated example for three items |
-| P2-07 | **Low-stock alerts** (dashboard card, `stock.low` event) | FR-IV-06 | S | P2-04 | Alert appears when a sale pushes an ingredient to its minimum |
+| P2-07 | **Low-stock alerts** (O-02 page with the "Stok menipis" card, Dasbor nav badge, `stock.low` on its own `stock_events` channel, owner SSE stream) | FR-IV-06 | S | P2-04 | Alert appears when a sale pushes an ingredient to its minimum |
 | P2-08 | **Margin boost in recommendations** (neutral when recipe incomplete) | FR-RC-06 | S | P2-06, P1-16 | Scoring tests: higher-margin item ranks above equal-confidence lower-margin item; no recipe → no boost |
 
 **Phase 2 exit:** a paid order deducts stock and snapshots COGS; HPP report matches a hand calculation; items hide themselves when ingredients run out.
@@ -237,5 +237,5 @@ Keep this table up to date at the end of each session.
 |---|---|---|
 | 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
 | 1 | 17 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ P1-15 ✔ P1-16 ✔ P1-17 ✔ |
-| 2 | 6 / 8 | P2-01 ✔ P2-02 ✔ P2-03 ✔ P2-04 ✔ P2-05 ✔ P2-06 ✔ |
+| 2 | 7 / 8 | P2-01 ✔ P2-02 ✔ P2-03 ✔ P2-04 ✔ P2-05 ✔ P2-06 ✔ P2-07 ✔ |
 | 3 | 0 / 8 | |
