@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { type DbExecutor, getDb } from "@/db/client";
 import { ingredients, restocks, stockMovements, suppliers } from "@/db/schema";
+import { fromMilli, toMilli } from "@/lib/quantity";
 
 // SQL only; shaping and rules live in service.ts.
 
@@ -162,11 +163,18 @@ export function selectLowStock(db: DbExecutor = getDb()) {
     );
 }
 
-// One sale_deduction movement per ingredient of an order, and the matching
-// change to stock_qty (Schema §4 I7). System rows: created_by is null.
-export async function insertSaleDeductions(
+// Movements that belong to an order (sale deduction, void return, waste) and
+// the matching change to stock_qty, once per ingredient with the net of its
+// rows (Schema §4 I7). The caller holds the ingredient locks. created_by is
+// null for system rows (the sale deduction).
+export async function insertOrderMovements(
   orderId: string,
-  rows: { ingredientId: string; qtyDelta: string }[],
+  rows: {
+    ingredientId: string;
+    type: "sale_deduction" | "void_return" | "waste";
+    qtyDelta: string;
+  }[],
+  createdBy: string | null,
   now: Date,
   db: DbExecutor,
 ) {
@@ -174,23 +182,50 @@ export async function insertSaleDeductions(
   await db.insert(stockMovements).values(
     rows.map((row) => ({
       ingredientId: row.ingredientId,
-      type: "sale_deduction" as const,
+      type: row.type,
       qtyDelta: row.qtyDelta,
       refType: "order",
       refId: orderId,
-      createdBy: null,
+      createdBy,
       createdAt: now,
     })),
   );
+  const net = new Map<string, number>();
   for (const row of rows) {
+    net.set(
+      row.ingredientId,
+      (net.get(row.ingredientId) ?? 0) + toMilli(row.qtyDelta),
+    );
+  }
+  for (const [id, milli] of net) {
+    if (milli === 0) continue;
     await db
       .update(ingredients)
       .set({
-        stockQty: sql`${ingredients.stockQty} + ${row.qtyDelta}::numeric`,
+        stockQty: sql`${ingredients.stockQty} + ${fromMilli(milli)}::numeric`,
         updatedAt: now,
       })
-      .where(eq(ingredients.id, row.ingredientId));
+      .where(eq(ingredients.id, id));
   }
+}
+
+// What a sale took out of stock for an order, per ingredient (negative).
+export function selectOrderSaleDeductions(orderId: string, db: DbExecutor) {
+  return db
+    .select({
+      ingredientId: stockMovements.ingredientId,
+      qtyDelta: sql<string>`sum(${stockMovements.qtyDelta})::text`,
+    })
+    .from(stockMovements)
+    .where(
+      and(
+        eq(stockMovements.type, "sale_deduction"),
+        eq(stockMovements.refType, "order"),
+        eq(stockMovements.refId, orderId),
+      ),
+    )
+    .groupBy(stockMovements.ingredientId)
+    .orderBy(asc(stockMovements.ingredientId));
 }
 
 // Restock (P2-05): the purchased ingredients, locked for update in id order

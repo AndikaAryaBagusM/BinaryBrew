@@ -60,6 +60,8 @@ function messageFor(error: AppError): string {
       });
     case "ORDER_STATUS_CHANGED":
       return t("error.orderStatusChanged");
+    case "REFUND_STATUS_CHANGED":
+      return t("error.refundStatusChanged");
     case "NAME_TAKEN":
       return t("error.nameTaken");
     case "UNIT_LOCKED":

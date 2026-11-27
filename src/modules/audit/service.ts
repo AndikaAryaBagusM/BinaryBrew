@@ -23,8 +23,10 @@ export const auditActions = [
   "modifier_group.update",
   "modifier_option.create",
   "modifier_option.update",
+  "order.void",
   "payment.manual_confirm",
   "recipe.update",
+  "refund.process",
   "refund.request",
   "restock.create",
   "setting.update",
@@ -83,15 +85,23 @@ export async function audit(
   );
 }
 
-// The newest of the given actions per entity, with who did it and when
-// (S-08 "Ditandai habis oleh Dimas, 17.20").
+// The newest of the given actions per entity, with who did it, when, and its
+// metadata (S-08 "Ditandai habis oleh Dimas, 17.20"; O-12 void details).
 export async function latestAuditByEntity(
   entityType: string,
   entityIds: string[],
   actions: readonly AuditAction[],
   { db }: { db?: DbExecutor } = {},
 ): Promise<
-  Map<string, { action: AuditAction; actorName: string | null; at: Date }>
+  Map<
+    string,
+    {
+      action: AuditAction;
+      actorName: string | null;
+      at: Date;
+      metadata: Record<string, unknown>;
+    }
+  >
 > {
   const rows = await repo.selectLatestByEntity(
     entityType,
@@ -106,6 +116,7 @@ export async function latestAuditByEntity(
         action: row.action as AuditAction,
         actorName: row.actorName,
         at: row.createdAt,
+        metadata: (row.metadata ?? {}) as Record<string, unknown>,
       },
     ]),
   );

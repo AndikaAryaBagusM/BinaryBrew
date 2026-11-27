@@ -112,7 +112,12 @@ export function CounterScreen({
   initialMenu,
   mockPay,
 }: {
-  user: { name: string; sessionId: string; canRestock: boolean };
+  user: {
+    name: string;
+    sessionId: string;
+    canRestock: boolean;
+    canVoid: boolean;
+  };
   initial: CounterOrderData[];
   initialMenu: CounterMenuData;
   mockPay: boolean;
@@ -523,7 +528,12 @@ export function CounterScreen({
       {!locked && detailId && (
         <OrderDetail
           orderId={detailId}
+          canVoid={user.canVoid}
           onAdvance={(order) => advanceFromDetail(order.id)}
+          onVoided={() => {
+            setDetailId(null);
+            void queryClient.invalidateQueries({ queryKey: QUEUE_KEY });
+          }}
           onClose={() => setDetailId(null)}
           onSignedOut={goToLogin}
         />

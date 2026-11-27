@@ -532,6 +532,16 @@ export async function listActiveCounterStaff(
     .map(({ id, name }) => ({ id, name }));
 }
 
+// Display names for other modules (O-12 "disetujui Bagas").
+export async function getUserNames(
+  ids: readonly string[],
+  db: DbExecutor = getDb(),
+): Promise<Map<string, string>> {
+  const valid = [...new Set(ids)].filter((id) => UUID.test(id));
+  const rows = await repo.selectUserNames(valid, db);
+  return new Map(rows.map((row) => [row.id, row.name]));
+}
+
 export async function findActiveOwner(
   db: DbExecutor = getDb(),
 ): Promise<{ id: string; name: string } | undefined> {

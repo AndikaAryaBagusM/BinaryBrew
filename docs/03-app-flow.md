@@ -243,16 +243,18 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["S-06 Order detail: Void"] --> B["Enter reason"]
+  A["S-06 Order detail: Void (owner or staff)"] --> B["Choose a reason (and a note)"]
   B --> C["Owner PIN elevation"]
   C --> D{"Order status"}
   D -- "paid" --> E["Return ingredients to stock (void_return)"]
-  D -- "preparing or ready" --> F["Log ingredients as waste"]
+  D -- "preparing or ready" --> F["Return them and log the same as waste (stock unchanged)"]
   E --> G["Order voided; refund request created"]
   F --> G
   G --> H["Owner refunds manually in the gateway dashboard"]
-  H --> I["O-12: mark refund processed; payment becomes refunded"]
+  H --> I["O-12: enter the gateway refund id, owner PIN; refund processed, payment refunded"]
 ```
+
+P3-01: the reason is one of "Pelanggan berubah pikiran", "Pesanan salah input", "Menu tidak bisa dibuat", "Pembayaran ganda" or "Lainnya" (which needs a note); S-06 says before the PIN whether the ingredients go back to stock or are logged as waste, and the refund amount. Late-payment refunds (§5, E3) appear in O-12 too, marked as requested by the system.
 
 ## 10. Inventory flows (Phase 2–3)
 

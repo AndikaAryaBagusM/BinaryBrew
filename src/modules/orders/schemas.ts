@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_LINES } from "./pricing";
+import { voidReasons } from "./void-reasons";
 
 // Request bodies (Tech §5: Zod at every boundary, unknown fields refused).
 // Quantities and option rules are checked by the pricing service, which
@@ -12,6 +13,24 @@ export const clientToken = z.string().regex(/^[A-Za-z0-9_-]{16,64}$/);
 // which one that is.
 export const statusChangeBody = z.strictObject({
   status: z.enum(["preparing", "ready", "completed"]),
+});
+
+// S-06 void (P3-01): a reason from the list; "other" needs the note.
+// elevationId comes from POST /api/auth/elevate (scope void_order).
+export const voidOrderBody = z
+  .strictObject({
+    reason: z.enum(voidReasons),
+    note: z.string().trim().max(200).optional(),
+    elevationId: z.uuid(),
+  })
+  .refine((body) => body.reason !== "other" || Boolean(body.note), {
+    path: ["note"],
+  });
+
+// O-12 list: one business day (default today) and an optional search.
+export const ownerOrdersQuery = z.strictObject({
+  date: z.iso.date().optional(),
+  q: z.string().trim().max(64).optional(),
 });
 
 export const createOrderBody = z.strictObject({

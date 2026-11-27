@@ -180,7 +180,7 @@ The test for P1-15 asserts that each planted rule appears with confidence within
 
 | ID | Task | Refs | Size | Depends | Done when |
 |---|---|---|---|---|---|
-| P3-01 | **Void and refund flows:** S-06 void with reason and elevation, stock return/waste, refund requests, O-12 order list and "mark refund processed" | FR-PM-08, FR-IV-09, FR-OW-08, BR-07, BR-08; Schema §5.4 | L | P2-04 | Void before preparing returns stock; void after preparing logs waste; refund shows until marked processed; every step audited |
+| P3-01 | **Void and refund flows:** S-06 void with reason and elevation (owner or staff), stock return, or return plus waste once preparation started, refund requests, O-12 order list (one business day, number or reference search) and "mark refund processed" with the gateway refund id | FR-PM-08, FR-IV-09, FR-OW-08, BR-07, BR-08; Schema §5.4 | L | P2-04 | Void before preparing returns stock; void after preparing logs waste; refund shows until marked processed; every step audited |
 | P3-02 | **Stock count (O-08) and variance report (O-10)** | FR-IV-07, FR-IV-08; Schema §5.6 | M | P2-04 | Count with differences requires reasons and owner PIN; ledger and `stock_qty` stay equal |
 | P3-03 | **Owner dashboard (O-02)** with sales, peak hours, best sellers, low stock, recommendation card | FR-OW-06 | M | P2-07 | Numbers match the reference SQL queries on seeded data |
 | P3-04 | **Recommendation settings and performance (O-11)** and "recalculate now" | FR-RC-08, FR-RC-09 | M | P1-16 | Changing weights changes ranking in tests; acceptance report matches events |
@@ -238,4 +238,4 @@ Keep this table up to date at the end of each session.
 | 0 | 7 / 7 | P0-01 ✔ P0-02 ✔ P0-03 ✔ P0-04 ✔ P0-05 ✔ P0-06 ✔ P0-07 ✔ |
 | 1 | 17 / 17 | P1-01 ✔ P1-02 ✔ P1-03 ✔ P1-04 ✔ P1-05 ✔ P1-06 ✔ P1-07 ✔ P1-08 ✔ P1-09 ✔ P1-10 ✔ P1-11 ✔ P1-12 ✔ P1-13 ✔ P1-14 ✔ P1-15 ✔ P1-16 ✔ P1-17 ✔ |
 | 2 | 8 / 8 | P2-01 ✔ P2-02 ✔ P2-03 ✔ P2-04 ✔ P2-05 ✔ P2-06 ✔ P2-07 ✔ P2-08 ✔ |
-| 3 | 0 / 8 | |
+| 3 | 1 / 8 | P3-01 ✔ |

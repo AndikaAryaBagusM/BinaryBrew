@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ReceiptText } from "lucide-react";
+import { Ban, ReceiptText } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/button";
 import { Modal } from "@/components/modal";
@@ -14,10 +14,12 @@ import { formatQueueNumber } from "@/lib/order-display";
 import { formatTime } from "@/lib/time";
 import { api, type OrderDetailData } from "./api";
 import { counterOrderKey } from "./charge-dialog";
+import { VoidDialog } from "./void-dialog";
 
 // S-06 Order detail (Figma 16:2468, Design §7, FR-POS-05): channel, payment,
 // lines, total, the four status times, the next status step and the
-// receipt. Void ("Batalkan pesanan") arrives in Phase 3.
+// receipt. "Batalkan pesanan" (P3-01) sits apart at the bottom, for the
+// owner and staff only, and opens the reason and PIN steps (void-dialog).
 
 const methodLabel: Record<
   NonNullable<OrderDetailData["payment"]>["method"],
@@ -44,16 +46,21 @@ const isQueued = (status: string): status is QueueStatus =>
 
 export function OrderDetail({
   orderId,
+  canVoid,
   onAdvance,
+  onVoided,
   onClose,
   onSignedOut,
 }: {
   orderId: string;
+  canVoid: boolean;
   onAdvance: (order: OrderDetailData) => Promise<void>;
+  onVoided: () => void;
   onClose: () => void;
   onSignedOut: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [voiding, setVoiding] = useState(false);
   const { data: order, error } = useQuery({
     queryKey: counterOrderKey(orderId),
     queryFn: async () => {
@@ -94,6 +101,17 @@ export function OrderDetail({
     setBusy(false);
   }
 
+  if (voiding) {
+    return (
+      <VoidDialog
+        order={order}
+        onBack={() => setVoiding(false)}
+        onVoided={onVoided}
+        onSignedOut={onSignedOut}
+      />
+    );
+  }
+
   return (
     <Modal
       placement="drawer"
@@ -121,6 +139,18 @@ export function OrderDetail({
             />
           )}
         </dl>
+
+        {order.status === "voided" && (
+          <div className="flex flex-col gap-1 rounded-card bg-danger-soft p-3 text-body">
+            <p className="font-semibold text-danger">
+              {t("counter.voidedBy", {
+                name: order.voidedByName ?? "",
+                time: time(order.voidedAt),
+              })}
+            </p>
+            {order.voidReason && <p className="text-ink">{order.voidReason}</p>}
+          </div>
+        )}
 
         <ul className="flex flex-col gap-2">
           {order.items.map((item, index) => (
@@ -185,6 +215,21 @@ export function OrderDetail({
           <ReceiptText aria-hidden="true" size={24} />
           {t("counter.viewReceipt")}
         </a>
+        {canVoid && isQueued(order.status) && (
+          <div className="mt-auto flex items-center gap-3 border-t border-line pt-4">
+            <button
+              type="button"
+              onClick={() => setVoiding(true)}
+              className="focus-ring flex h-14 cursor-pointer items-center gap-2 rounded-card border-[1.5px] border-danger bg-surface px-4 text-label text-danger active:bg-danger-soft"
+            >
+              <Ban aria-hidden="true" size={22} />
+              {t("counter.void")}
+            </button>
+            <p className="text-caption text-ink-muted">
+              {t("counter.voidHint")}
+            </p>
+          </div>
+        )}
       </div>
     </Modal>
   );

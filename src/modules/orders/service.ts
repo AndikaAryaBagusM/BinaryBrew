@@ -3,8 +3,10 @@ import { type DbExecutor, getDb } from "@/db/client";
 import { AppError } from "@/lib/errors";
 import { newPublicToken } from "@/lib/ids";
 import { addDays, businessDate } from "@/lib/time";
+import { audit } from "@/modules/audit/service";
 import { createRateLimiter } from "@/modules/auth/rate-limit";
 import {
+  consumeElevation,
   COUNTER_ROLES,
   findActiveOwner,
   listActiveCounterStaff,
@@ -24,17 +26,27 @@ import {
   deleteSeedPayments,
   ensureQrisCharge,
   expirePendingCharges,
+  getLatestPayments,
   getOrderPayment,
+  getOrderRefunds,
   type PaymentSummary,
   recordSeedPayments,
+  type RefundSummary,
+  requestVoidRefund,
 } from "@/modules/payments/service";
 import { recipeCost } from "@/lib/money";
-import { deductForSale, getStockLevels } from "@/modules/inventory/service";
+import {
+  deductForSale,
+  getStockLevels,
+  reverseOrderStock,
+} from "@/modules/inventory/service";
 import { linkSuggestionEvents } from "@/modules/recommendations/service";
 import { getSettings } from "@/modules/settings/service";
 import { type CsvProblem, readOrderCsv } from "./order-csv";
 import { type CartLine, priceOrder } from "./pricing";
 import * as repo from "./repo";
+import { orderSearch } from "./search";
+import { type VoidReason, voidReasonText } from "./void-reasons";
 import {
   orderStockNeeds,
   scaleNeeds,
@@ -559,6 +571,9 @@ export type CounterOrderDetail = {
   preparingAt: Date | null;
   readyAt: Date | null;
   completedAt: Date | null;
+  voidedAt: Date | null;
+  voidReason: string | null;
+  voidedByName: string | null;
   items: {
     name: string;
     quantity: number;
@@ -582,6 +597,10 @@ export async function getCounterOrder(
   orderId: string,
 ): Promise<CounterOrderDetail> {
   requireRole(actor, COUNTER_ROLES);
+  return orderDetail(orderId);
+}
+
+async function orderDetail(orderId: string): Promise<CounterOrderDetail> {
   if (!UUID.test(orderId)) throw new AppError("NOT_FOUND");
   const order = await repo.selectCounterOrder(orderId);
   if (!order) throw new AppError("NOT_FOUND");
@@ -605,6 +624,197 @@ export async function getCounterOrder(
         }
       : null,
   };
+}
+
+// --- Void and refunds (P3-01, FR-PM-08, FR-IV-09, BR-07, BR-08) ---
+
+// The owner, or staff with the owner's PIN (FR-PM-08); not the barista.
+export const VOID_ROLES = ["owner", "staff"] as const;
+
+export { voidReasons, type VoidReason } from "./void-reasons";
+
+const VOIDABLE: readonly OrderStatus[] = ["paid", "preparing", "ready"];
+
+// S-06 "Batalkan pesanan" (Schema §5.4, Flow §9). One transaction, order
+// locked first: spend the owner's elevation (scope void_order), mark the
+// order voided, give the ingredients back (as waste too once preparation had
+// started: BR-08), ask for the paid amount back and audit both steps. The
+// counter, the customer's status page and the board hear it on commit.
+export async function voidOrder(
+  actor: SessionUser | null,
+  input: {
+    orderId: string;
+    reason: VoidReason;
+    note?: string;
+    elevationId: string;
+  },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{
+  status: "voided";
+  stock: "returned" | "wasted" | "none";
+  refund: { id: string; amount: number } | null;
+}> {
+  const user = requireRole(actor, VOID_ROLES);
+  if (!UUID.test(input.orderId)) throw new AppError("NOT_FOUND");
+  const reason = voidReasonText(input.reason, input.note);
+  if (!reason) throw new AppError("VALIDATION_FAILED");
+
+  return getDb().transaction(async (tx) => {
+    const order = await repo.lockOrder(input.orderId, tx);
+    if (!order) throw new AppError("NOT_FOUND");
+    if (!VOIDABLE.includes(order.status)) {
+      throw new AppError("ORDER_STATUS_CHANGED", {
+        details: { status: order.status },
+      });
+    }
+    const elevation = await consumeElevation(
+      user,
+      { elevationId: input.elevationId, scope: "void_order" },
+      { now, db: tx },
+    );
+    await repo.markOrderVoided(
+      order.id,
+      { userId: user.userId, reason, now },
+      tx,
+    );
+    const prepared = order.status !== "paid";
+    const moved = await reverseOrderStock(
+      { orderId: order.id, prepared, userId: user.userId, now },
+      tx,
+    );
+    const stock =
+      moved.ingredients === 0 ? "none" : prepared ? "wasted" : "returned";
+    const refund = await requestVoidRefund(
+      { orderId: order.id, userId: user.userId, reason },
+      tx,
+    );
+    await audit(
+      {
+        action: "order.void",
+        actor: user,
+        entity: { type: "order", id: order.id },
+        reason,
+        metadata: {
+          queueNumber: order.queueNumber,
+          fromStatus: order.status,
+          stock,
+          refundId: refund?.id ?? null,
+          amount: refund?.amount ?? 0,
+          elevationId: elevation.elevationId,
+          ownerUserId: elevation.ownerUserId,
+        },
+      },
+      { db: tx, now },
+    );
+    if (refund) {
+      await audit(
+        {
+          action: "refund.request",
+          actor: user,
+          entity: { type: "refund", id: refund.id },
+          reason,
+          metadata: {
+            orderId: order.id,
+            paymentId: refund.paymentId,
+            amount: refund.amount,
+          },
+        },
+        { db: tx, now },
+      );
+    }
+    await repo.notifyOrderEvents(
+      { orderId: order.id, status: "voided", queueNumber: order.queueNumber },
+      tx,
+    );
+    return {
+      status: "voided" as const,
+      stock,
+      refund: refund && { id: refund.id, amount: refund.amount },
+    };
+  });
+}
+
+// O-12 Orders (FR-OW-08): every order of one business day (today when none
+// is given), newest first, with its payment and refund state. `q` keeps the
+// orders whose queue number is the number in it ("12", "#012") or whose
+// payment reference contains it.
+export type OwnerOrderRow = {
+  id: string;
+  queueNumber: number | null;
+  status: OrderStatus;
+  channel: "self_order" | "counter";
+  table: string | null;
+  createdByName: string | null;
+  total: number;
+  createdAt: Date;
+  paidAt: Date | null;
+  payment: {
+    method: "qris_dynamic" | "qris_static_manual" | "cash";
+    status: "pending" | "paid" | "failed" | "expired" | "refunded";
+    reference: string | null;
+  } | null;
+  refund: "requested" | "processed" | null;
+};
+
+export async function listOwnerOrders(
+  actor: SessionUser | null,
+  input: { date?: string; q?: string },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ date: string; today: string; orders: OwnerOrderRow[] }> {
+  requireRole(actor, ["owner"]);
+  const { business_day_cutoff: cutoff } = await getSettings([
+    "business_day_cutoff",
+  ]);
+  const today = businessDate(now, cutoff);
+  const date = input.date ?? today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) {
+    throw new AppError("VALIDATION_FAILED");
+  }
+  const rows = await repo.selectOrdersOfDay(date);
+  const ids = rows.map((row) => row.id);
+  const [payments, refunds] = await Promise.all([
+    getLatestPayments(ids),
+    getOrderRefunds(ids),
+  ]);
+  const refundOf = new Map<string, RefundSummary["status"]>();
+  for (const refund of refunds) {
+    // An open request wins over a processed one.
+    if (refundOf.get(refund.orderId) !== "requested") {
+      refundOf.set(refund.orderId, refund.status);
+    }
+  }
+  const list = rows.map((row) => {
+    const payment = payments.get(row.id);
+    return {
+      ...row,
+      payment: payment
+        ? {
+            method: payment.method,
+            status: payment.status,
+            reference: payment.manualReference ?? payment.providerRef,
+          }
+        : null,
+      refund: refundOf.get(row.id) ?? null,
+    };
+  });
+  const matches = orderSearch(input.q);
+  return {
+    date,
+    today,
+    orders: list.filter((row) =>
+      matches(row.queueNumber, [row.payment?.reference ?? null]),
+    ),
+  };
+}
+
+// O-12 detail: S-06's view of the order plus its refunds.
+export async function getOwnerOrder(
+  actor: SessionUser | null,
+  orderId: string,
+): Promise<CounterOrderDetail & { refunds: RefundSummary[] }> {
+  requireRole(actor, ["owner"]);
+  const order = await orderDetail(orderId);
+  return { ...order, refunds: await getOrderRefunds([order.id]) };
 }
 
 // Schema §5.3 expiry, shared with the sweep (P1-09). The caller holds the
