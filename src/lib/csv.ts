@@ -79,3 +79,22 @@ export function parseCsv(text: string): CsvRow[] {
   if (fields.length > 0 || field !== "" || quoted) endRow();
   return rows;
 }
+
+// Writing (O-09 "Unduh CSV"): one line per row, CRLF line ends, a field
+// quoted when it holds a comma, quote or line break. A field starting with
+// =, +, - or @ (a spreadsheet formula) is prefixed with ' so a menu name
+// cannot run as one. Numbers are written plain.
+export function toCsv(rows: readonly (readonly (string | number | null)[])[]) {
+  return rows
+    .map((row) =>
+      row
+        .map((value) => {
+          if (value === null) return "";
+          if (typeof value === "number") return String(value);
+          const text = /^[=+\-@]/.test(value) ? `'${value}` : value;
+          return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        })
+        .join(","),
+    )
+    .join("\r\n");
+}

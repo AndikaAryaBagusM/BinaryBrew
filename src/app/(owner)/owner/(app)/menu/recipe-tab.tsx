@@ -25,6 +25,7 @@ import {
 import {
   type IngredientData,
   INGREDIENTS_QUERY,
+  MENU_QUERY,
   itemDetailsQuery,
   useIngredients,
   useItemDetails,
@@ -166,6 +167,7 @@ function RecipeEditor({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: itemDetailsQuery(item.id) }),
       queryClient.invalidateQueries({ queryKey: INGREDIENTS_QUERY }),
+      queryClient.invalidateQueries({ queryKey: MENU_QUERY }),
     ]);
     setSavedNotice(true);
   }

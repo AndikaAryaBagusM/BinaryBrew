@@ -20,6 +20,8 @@ export type ModifierGroupData = Json<OwnerModifierGroup>;
 export type ModifierOptionData = ModifierGroupData["options"][number];
 
 export const INGREDIENTS_QUERY = ["owner", "ingredients"] as const;
+// O-03 list (with each item's HPP, P2-06): a recipe save refreshes it too.
+export const MENU_QUERY = ["owner", "menu"] as const;
 export const MODIFIER_GROUPS_QUERY = ["owner", "modifier-groups"] as const;
 export const itemDetailsQuery = (id: string) =>
   ["owner", "menu-item", id] as const;

@@ -209,7 +209,7 @@ Two columns: **Sedang disiapkan** (left) and **Siap diambil** (right, larger, br
 
 ### 6.4 Owner
 
-Left navigation (collapses to a bottom tab bar on phones, with short labels: Pilihan, Bahan, Pengguna, Setelan), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
+Left navigation (on phones, a bottom tab bar with one tab per section, as in Figma 18:502: Menu, Stok, Laporan, Lainnya; a section with several pages opens a list of them), content area with page title, filters row, then table or cards. Forms use a single column with inline validation.
 
 ## 7. Screen specifications
 
@@ -273,13 +273,13 @@ Left navigation (collapses to a bottom tab bar on phones, with short labels: Pil
 |---|---|
 | O-01 | Centred card: email, password, "Masuk". Rate-limit message on repeated failures. |
 | O-02 | Row of 4 stat cards (penjualan hari ini, jumlah pesanan, jam tersibuk, menu terlaris), a sales-by-hour bar chart, a low-stock list, recommendation acceptance card. Charts use the colour tokens and have text alternatives. |
-| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Phase 1 (P1-13): no HPP column yet; since P2-03 the status shows "Stok habis" with the short ingredients when stock cannot cover one serving; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
+| O-03 | Table: name, category, price, status, promoted switch, sold-out switch. "Tambah menu" opens a form; edit opens a side panel with the recipe tab (O-06) in Phase 2. Since P2-06 an HPP column sits between price and status: the current HPP (same rounding as O-06), with "belum lengkap" under it while a recipe ingredient has no cost, and "—" without a recipe; since P2-03 the status shows "Stok habis" with the short ingredients when stock cannot cover one serving; items and categories are switched off ("Nonaktif"), never deleted; a "Kategori" panel adds, renames and switches off categories; no item images. |
 | O-04 | `/owner/modifiers` "Pilihan menu" (P2-02): group cards on the left (rule "Wajib · pilih 1" / "Opsional · maks 2", "dipakai di N menu", a "Tidak mengubah stok" tag when no option has deltas); the chosen group on the right with name, "Aktif" switch, "Minimal pilih" / "Maksimal pilih", an options table (Opsi / Tambahan harga / Pengaruh ke stok (per porsi) / Aktif), "Tambah opsi" opening a side panel with ingredient delta rows (minus = uses less), and read-only "Dipakai di menu" chips. Groups and options are switched off, never deleted. |
 | O-05 | Table: ingredient, kind (Bahan baku, Jual jadi), unit, stock, minimum, average cost ("—" when none), one status chip. The chip shows the first that applies: Minus (stock < 0, row tinted `danger-soft`), Habis (= 0), Menipis (≤ minimum), Biaya belum ada (average cost 0), Aman. Summary chips above the table count active ingredients by stock state only (n aman, menipis, habis, minus). "Tambah bahan" opens a side panel that also edits; opening stock (quantity and total price, both or neither) is asked only on create and previews the average cost; the unit locks once the ingredient has stock history or a recipe. Ingredients are switched off (greyed, "Nonaktif"), never deleted. A "Pemasok" panel adds, renames, notes and switches off suppliers (like the O-03 "Kategori" panel). P2-01 hides "Catat restock" until O-07 exists (P2-05). |
 | O-06 | The O-03 edit panel, titled with the item name, gets tabs Detail / Resep / Pilihan (P2-02). Resep: cards Harga jual / HPP / Margin (green, red when negative), a table Bahan / Jumlah / Biaya/unit / Biaya with a delete button per line, "Tambah bahan", a blue row and notice for an ingredient with no cost yet (counted as 0), and "Simpan resep". HPP and margin are computed live from the current average costs (`src/lib/money.ts`). Pilihan: tick and order the groups the item offers; "Simpan pilihan". A new item gets these tabs after it is saved. |
 | O-07 | Multi-row entry (up to 20): ingredient, quantity, total price, supplier, date (default today, never later); shows the new average cost per row before saving with "naik dari …", "turun dari …", "tetap" (equal as shown) or "biaya pertama"; a later row of the same ingredient starts from the earlier one. "Total pembelian" and "Simpan n restock" below. Errors list "Baris n: …" above the table. |
 | O-08 | One row per ingredient with system quantity, counted quantity input, difference, reason selector (required when different). Owner PIN on save. |
-| O-09 | Table: item, price, HPP, margin, margin %, flag for low margin; items without a recipe show "Resep belum ada". |
+| O-09 | Figma 20:1649 (P2-06). Header: "Periode" month select (current business month back to the first sale, at most 24) and "Unduh CSV". Three cards: Rata-rata margin ("n menu dengan resep"), Margin rendah ("di bawah batas n%", the O-14 threshold), Resep belum lengkap ("HPP belum akurat"). Table of active items: Menu / Harga / HPP / Margin / Margin % / Catatan, lowest margin first and items without a recipe last. A row below the threshold is tinted `danger-soft` with its margin % in red and a solid red "Margin rendah" chip; a blue "Resep belum lengkap" chip while an ingredient has no cost; a grey "Resep belum ada" chip and "—" without a recipe. Below it, "Penjualan per periode · <bulan>": Menu / Terjual / Pendapatan / HPP / Margin / Margin % from the HPP stored at payment, most sold first, with a Total row; portions without a stored HPP are noted under the name and leave that margin "—". |
 | O-10 | Table and a simple trend per ingredient; highlights the largest variances. |
 | O-11 | Controls for weights and thresholds; promoted items list; performance table (shown, accepted, acceptance %); "Hitung ulang sekarang". |
 | O-12 | Searchable order list; detail with receipt; refund requests with "Tandai sudah dikembalikan". |
@@ -604,10 +604,9 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.navSectionStock` | Stok |
 | `owner.navIngredients` | Bahan & stok |
 | `owner.navRestock` | Restock |
-| `owner.navModifiersShort` | Pilihan |
-| `owner.navIngredientsShort` | Bahan |
-| `owner.navUsersShort` | Pengguna |
-| `owner.navSettingsShort` | Setelan |
+| `owner.navSectionReports` | Laporan |
+| `owner.navHpp` | HPP & margin |
+| `owner.navMore` | Lainnya |
 | `owner.ingredientsTitle` | Bahan & stok |
 | `owner.ingredientsSubtitle` | Stok dihitung dari resep setiap pesanan dibayar. |
 | `owner.ingredientsEmpty` | Belum ada bahan. Tambahkan bahan pertama. |
@@ -701,6 +700,34 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.restockIngredientRequired` | Pilih bahan |
 | `owner.restockDateInvalid` | Tanggal tidak boleh setelah hari ini |
 | `owner.restockRowError` | Baris {n}: {message} |
+| `owner.hppTitle` | HPP & margin |
+| `owner.hppSubtitle` | Biaya per menu dari resep dan biaya rata-rata bahan |
+| `owner.hppPeriod` | Periode |
+| `owner.hppDownload` | Unduh CSV |
+| `owner.hppAverage` | Rata-rata margin |
+| `owner.hppAverageNote` | {n} menu dengan resep |
+| `owner.hppLowCard` | Margin rendah |
+| `owner.hppLowNote` | di bawah batas {pct}% |
+| `owner.hppIncompleteCard` | Resep belum lengkap |
+| `owner.hppIncompleteNote` | HPP belum akurat |
+| `owner.hppCount` | {n} menu |
+| `owner.hppCurrentTitle` | HPP dan margin saat ini |
+| `owner.colMarginPct` | Margin % |
+| `owner.colNote` | Catatan |
+| `owner.hppLowMargin` | Margin rendah |
+| `owner.hppIncomplete` | Resep belum lengkap |
+| `owner.hppIncompleteShort` | belum lengkap |
+| `owner.hppNoRecipe` | Resep belum ada |
+| `owner.hppEmpty` | Belum ada menu aktif. |
+| `owner.hppSalesTitle` | Penjualan per periode |
+| `owner.hppSalesHelp` | Dari pesanan yang dibayar. HPP dicatat saat pembayaran, jadi tidak berubah saat biaya bahan berubah. |
+| `owner.hppSalesEmpty` | Belum ada penjualan di periode ini. |
+| `owner.colSold` | Terjual |
+| `owner.colRevenue` | Pendapatan |
+| `owner.colUncosted` | Porsi tanpa HPP |
+| `owner.hppSalesTotal` | Total |
+| `owner.hppUncostedNote` | {n} porsi tanpa HPP tercatat |
+| `owner.hppSalesCsvTitle` | Penjualan {month} |
 | `owner.restockEmpty` | Belum ada bahan aktif. Tambahkan dulu di Bahan & stok. |
 | `owner.saveRecipe` | Simpan resep |
 | `owner.recipeSaved` | Resep tersimpan. |

@@ -489,6 +489,46 @@ export async function rewindQueueCounters(dates: string[], db: DbExecutor) {
 // Bulk inserts stay well under the 65,535 bind parameters of one statement.
 const INSERT_CHUNK = 1000;
 
+// P2-06 HPP report: sales per item over business dates, paid and not voided.
+export async function selectSalesByItem(
+  range: { from: string; to: string },
+  db: DbExecutor,
+) {
+  const rows = await db
+    .select({
+      menuItemId: orderItems.menuItemId,
+      quantity: sql<string>`sum(${orderItems.quantity})`,
+      revenue: sql<string>`sum(${orderItems.lineTotal})`,
+      cogs: sql<string>`coalesce(sum(${orderItems.unitCogs} * ${orderItems.quantity}), 0)`,
+      uncostedQuantity: sql<string>`coalesce(sum(${orderItems.quantity}) filter (where ${orderItems.unitCogs} is null), 0)`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .where(
+      and(
+        sql`${orders.paidAt} is not null`,
+        sql`${orders.status} <> 'voided'`,
+        sql`${orders.businessDate} between ${range.from} and ${range.to}`,
+      ),
+    )
+    .groupBy(orderItems.menuItemId);
+  return rows.map((row) => ({
+    menuItemId: row.menuItemId,
+    quantity: Number(row.quantity),
+    revenue: Number(row.revenue),
+    cogs: Number(row.cogs),
+    uncostedQuantity: Number(row.uncostedQuantity),
+  }));
+}
+
+export async function selectFirstSaleDate(db: DbExecutor) {
+  const [row] = await db
+    .select({ first: sql<string | null>`min(${orders.businessDate})` })
+    .from(orders)
+    .where(sql`${orders.paidAt} is not null`);
+  return row?.first ?? null;
+}
+
 export async function insertOrderBatch(
   orderValues: (typeof orders.$inferInsert)[],
   itemValues: (typeof orderItems.$inferInsert)[],

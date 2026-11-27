@@ -6,6 +6,7 @@ import type { DbTransaction } from "@/db/client";
 import * as schema from "@/db/schema";
 import { seedDatabase } from "@/db/seed/seed";
 import { newSecretToken } from "@/lib/ids";
+import { getItemCosts } from "@/modules/menu/service";
 import {
   IMPORT_SESSION,
   importOrderHistory,
@@ -317,6 +318,57 @@ describe("importOrderHistory", () => {
       });
       expect(await sessionOrders(tx, IMPORT_SESSION)).toEqual([]);
       expect(await tx.select().from(queueCounters)).toEqual([]);
+    });
+  });
+});
+
+// P2-06: history has no options, so each line's unit_cogs is the item's HPP
+// from its current recipe and average costs; stock is not deducted.
+describe("unit_cogs of past orders (FR-HP-03, P2-06)", () => {
+  it("is the item's current HPP for seeded and imported lines", async () => {
+    await inRollback(async (tx) => {
+      await seedDatabase(tx, seedInput);
+      // An item without a recipe keeps unit_cogs null.
+      const [croissant] = await tx
+        .select({ id: menuItems.id })
+        .from(menuItems)
+        .where(eq(menuItems.name, "Croissant"));
+      await tx
+        .delete(schema.recipeItems)
+        .where(eq(schema.recipeItems.menuItemId, croissant!.id));
+      await seedDemoOrders({ endDate }, { now, db: tx });
+      await importOrderHistory(
+        "order_ref,paid_at,item_name,quantity\nOLD-1,2026-08-01 09:15,Latte,2\nOLD-1,2026-08-01 09:15,Croissant,1",
+        { now, db: tx },
+      );
+
+      const lines = await tx
+        .select({
+          menuItemId: orderItems.menuItemId,
+          unitCogs: orderItems.unitCogs,
+        })
+        .from(orderItems);
+      const costs = await getItemCosts(
+        [...new Set(lines.map((line) => line.menuItemId))],
+        tx,
+      );
+      expect(lines.length).toBeGreaterThan(2000);
+      for (const line of lines) {
+        expect(line.unitCogs).toBe(costs.get(line.menuItemId)!.hpp);
+      }
+      expect(costs.get(croissant!.id)).toEqual({
+        status: "no_recipe",
+        hpp: null,
+      });
+      expect(
+        lines.filter((line) => line.unitCogs !== null).length,
+      ).toBeGreaterThan(0);
+      expect(
+        await tx
+          .select()
+          .from(schema.stockMovements)
+          .where(eq(schema.stockMovements.type, "sale_deduction")),
+      ).toEqual([]);
     });
   });
 });

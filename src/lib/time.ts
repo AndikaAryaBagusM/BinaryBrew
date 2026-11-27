@@ -61,6 +61,21 @@ export function formatDate(at: Date): string {
   return dateFormat.format(at);
 }
 
+const monthFormat = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "UTC",
+  month: "long",
+  year: "numeric",
+});
+
+// "2026-10" → "Oktober 2026" (O-09 period).
+export function formatMonth(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) throw new RangeError(`month must be YYYY-MM, got ${month}`);
+  return monthFormat.format(
+    new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)),
+  );
+}
+
 // O-13 "Terakhir aktif": "18.41" today, "kemarin" yesterday, otherwise the
 // date; calendar days in the shop's time zone.
 export function formatLastActive(

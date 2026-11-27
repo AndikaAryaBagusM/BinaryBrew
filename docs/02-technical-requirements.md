@@ -224,7 +224,7 @@ Built in Phase 1 (P1-13). Owner only; every change checks the origin, runs in on
 
 | Method and path | Auth | Purpose |
 |---|---|---|
-| `GET /api/owner/menu-items` | Owner | O-03: every category (with item count) and every item, active or not, with `isPromoted`, `isAvailable`, who marked it sold out and `stockShort` (ingredients below one serving). |
+| `GET /api/owner/menu-items` | Owner | O-03: every category (with item count) and every item, active or not, with `isPromoted`, `isAvailable`, who marked it sold out and `stockShort` (ingredients below one serving), and `cost` `{status, hpp}` (P2-06: `complete`, `incomplete` while a recipe ingredient has no cost, or `no_recipe` with a null `hpp`). |
 | `POST /api/owner/menu-items` | Owner | Create an item: `categoryId`, `name` (1–60), `price` (whole rupiah, 0–10,000,000), optional `description` (≤ 200), `isActive`, `isPromoted`. 201. Audits `menu_item.create`. |
 | `PATCH /api/owner/menu-items/{id}` | Owner | Any subset of those fields (the "Promosikan" switch sends `isPromoted`). Returns `{id, changed}`; audits `menu_item.update` with each changed field's `from` and `to`, only when something changed. Items are never deleted: `isActive: false` hides them. A new price is refused with 409 `PRICE_NEGATIVE` when the item's cheapest allowed option mix would take it below zero. |
 | `POST /api/owner/categories` | Owner | Create a category (`name`, unique ignoring case, else 409 `NAME_TAKEN`); it goes last. Audits `category.create`. |
@@ -248,6 +248,8 @@ Built in Phase 1 (P1-13). Owner only; every change checks the origin, runs in on
 | `PATCH /api/owner/modifier-groups/{id}` | Owner | Any subset of those fields, checked against the stored values. 409 `MODIFIER_RULE` when the group would have more defaults than `maxSelect`, or (while items offer it) fewer active options than `minSelect`; 409 `PRICE_NEGATIVE` (with the item names) if any item offering the group could then reach a unit price below zero with its cheapest allowed choice. Groups are switched off, never deleted. Audits `modifier_group.update`. |
 | `POST /api/owner/modifier-groups/{id}/options` | Owner | Add an option: `name` (unique in the group ignoring case), `priceDelta` (whole rupiah, ±10,000,000), `isDefault`, `isActive`, `ingredientDeltas` `[{ingredientId, qtyDelta}]` (≤ 10, `qtyDelta` ≠ 0 with up to 3 decimals, negative = uses less; active ingredients only). In a single-choice group a new default replaces the old one. Same 409s as above. 201. Audits `modifier_option.create`. |
 | `PATCH /api/owner/modifier-options/{id}` | Owner | Any subset of those fields; `ingredientDeltas` replaces the set. Same rules and 409s; options are switched off, never deleted. Audits `modifier_option.update` (with `clearedDefaults` when another default was cleared). |
+| `GET /api/owner/reports/hpp` | Owner | O-09 (P2-06, FR-HP-01, 02, 04): optional `month` (`YYYY-MM`, default the current business month; must be one of `period.months`, the current month back to the first sale, at most 24, else 400). Returns `thresholdPct`; `summary` (`averagePermille` over items with a recipe, `withRecipe`, `lowMargin`, `incomplete`); `items`, every active item with `price`, `status` (`complete`, `incomplete`, `no_recipe`), `hpp`, `margin`, `marginPermille` (tenths of a percent) and `lowMargin` (below the threshold), from the current recipes and average costs, lowest margin first and items without a recipe last; `period` `{month, months, rows, totals}` with the month's paid, non-voided sales per item (`quantity`, `revenue`, `cogs` from `order_items.unit_cogs`, `uncostedQuantity`, and `margin` only when every portion has a cost). `no-store`. |
+| `GET /api/owner/reports/hpp/csv` | Owner | The same report as a download, `hpp-margin-YYYY-MM.csv` (UTF-8 with a byte order mark, CRLF): the current table, a blank line, then the month's sales with a total row. A field starting with `=`, `+`, `-` or `@` gets a leading `'`. `no-store`. |
 
 O-03 marks items sold out through `POST /api/counter/menu-items/{id}/sold-out` (the owner is a Counter role).
 
@@ -258,7 +260,7 @@ Later phases:
 | Menu | CRUD `/api/owner/categories`, `/menu-items`, `/modifier-groups`, `/modifier-options`; `PUT /menu-items/{id}/recipe`; promote flag via menu item update |
 | Inventory | `POST /stock-counts` (Elev `stock_adjustment`). Restocks are built (P2-05) as `POST /api/counter/restocks`, above. |
 | Orders | `GET /orders`, `POST /orders/{id}/refund-processed` (Elev) |
-| Reports | `GET /reports/sales`, `/best-sellers`, `/peak-hours`, `/hpp`, `/stock-variance`, `/recommendations` |
+| Reports | `GET /reports/sales`, `/best-sellers`, `/peak-hours`, `/stock-variance`, `/recommendations`. `/reports/hpp` is built (P2-06), above. |
 | System | `GET/PUT /settings`; users and devices CRUD; `POST /qr-tokens/{id}/rotate`; `GET /audit-logs`; `POST /reco/run` (Phase 3) |
 
 ## 7. Realtime

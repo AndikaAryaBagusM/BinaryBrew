@@ -258,13 +258,39 @@ export function recipeCost(lines: readonly CostLine[]): number {
 // O-06 margin: "Rp 11.836 · 53,8%". The percentage is of the selling price,
 // half-up to one decimal (away from zero for a loss); null when the price is 0.
 export function formatMargin(price: number, hpp: number): string {
+  const margin = price - hpp;
+  const amount = formatSignedRupiah(margin);
+  const permille = marginPermille(price, hpp);
+  return permille === null ? amount : `${amount} · ${formatPermille(permille)}`;
+}
+
+// Margin as a share of the selling price in tenths of a percent (538 =
+// 53,8%), half-up away from zero; null when the price is 0 (O-06, O-09).
+export function marginPermille(price: number, hpp: number): number | null {
   assertAmount(price, "price");
   assertAmount(hpp, "hpp");
+  if (price === 0) return null;
   const margin = price - hpp;
-  const amount =
-    margin < 0 ? `−${formatRupiah(-margin)}` : formatRupiah(margin);
-  if (price === 0) return amount;
   const permille = divideRoundHalfUp(Math.abs(margin) * 1000, price);
-  const text = `${Math.floor(permille / 10)},${permille % 10}%`;
-  return `${amount} · ${margin < 0 ? "−" : ""}${text}`;
+  return margin < 0 ? -permille : permille;
+}
+
+// 538 → "53,8%", -32 → "−3,2%" (a true minus sign).
+export function formatPermille(permille: number): string {
+  const abs = Math.abs(permille);
+  return `${permille < 0 ? "−" : ""}${Math.floor(abs / 10)},${abs % 10}%`;
+}
+
+// -6900 → "−Rp 6.900" (a true minus sign); O-09 margins can be negative.
+export function formatSignedRupiah(amount: number): string {
+  return amount < 0 ? `−${formatRupiah(-amount)}` : formatRupiah(amount);
+}
+
+// O-09 "Rata-rata margin": the mean of margin percentages in tenths of a
+// percent, half-up away from zero; null for an empty list.
+export function averagePermille(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sum = values.reduce((total, value) => total + value, 0);
+  const mean = divideRoundHalfUp(Math.abs(sum), values.length);
+  return sum < 0 ? -mean : mean;
 }

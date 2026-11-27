@@ -21,6 +21,7 @@ import {
   thClass,
   useSignedOutGuard,
 } from "../owner-ui";
+import { MENU_QUERY } from "../owner-queries";
 import { CategoriesPanel } from "./categories-panel";
 import { ItemPanel } from "./item-panel";
 
@@ -28,14 +29,14 @@ export type OwnerMenuData = Json<OwnerMenu>;
 export type OwnerItemData = OwnerMenuData["items"][number];
 export type OwnerCategoryData = OwnerMenuData["categories"][number];
 
-const MENU_QUERY = ["owner", "menu"] as const;
-
 type Panel =
   { kind: "item"; item: OwnerItemData | null } | { kind: "categories" } | null;
 
 // O-03: one table of every item. "Promosikan" lifts an item in the
 // recommendations (D4); "Tandai habis" is the same manual sold-out as the
-// Counter's S-08. The HPP column and stock-based statuses arrive in Phase 2.
+// Counter's S-08. HPP comes from the current recipe and average costs
+// (P2-06, the same rounding as O-06): "—" without a recipe, and a
+// "belum lengkap" note while an ingredient has no cost yet.
 export function MenuScreen({ initial }: { initial: OwnerMenuData }) {
   const queryClient = useQueryClient();
   const signedOut = useSignedOutGuard();
@@ -116,7 +117,7 @@ export function MenuScreen({ initial }: { initial: OwnerMenuData }) {
 
       {error && <Notice tone="danger">{error}</Notice>}
 
-      <TableCard label={t("owner.menuTitle")} minWidth="min-w-240">
+      <TableCard label={t("owner.menuTitle")} minWidth="min-w-262">
         <thead>
           <tr>
             <th scope="col" className={thClass}>
@@ -127,6 +128,9 @@ export function MenuScreen({ initial }: { initial: OwnerMenuData }) {
             </th>
             <th scope="col" className={`${thClass} w-28 text-right`}>
               {t("owner.colPrice")}
+            </th>
+            <th scope="col" className={`${thClass} w-28 text-right`}>
+              {t("owner.hpp")}
             </th>
             <th scope="col" className={`${thClass} w-52`}>
               {t("owner.colStatus")}
@@ -145,7 +149,7 @@ export function MenuScreen({ initial }: { initial: OwnerMenuData }) {
         <tbody>
           {items.length === 0 && (
             <tr>
-              <td colSpan={7} className={`${tdClass} text-ink-muted`}>
+              <td colSpan={8} className={`${tdClass} text-ink-muted`}>
                 {t("owner.menuEmpty")}
               </td>
             </tr>
@@ -166,6 +170,25 @@ export function MenuScreen({ initial }: { initial: OwnerMenuData }) {
                 <td className={tdClass}>{category?.name}</td>
                 <td className={`${tdClass} text-right whitespace-nowrap`}>
                   {formatRupiah(item.price)}
+                </td>
+                <td
+                  className={`${tdClass} text-right whitespace-nowrap tabular-nums`}
+                >
+                  {item.cost.hpp === null ? (
+                    <>
+                      <span aria-hidden="true">—</span>
+                      <span className="sr-only">{t("owner.hppNoRecipe")}</span>
+                    </>
+                  ) : (
+                    <>
+                      {formatRupiah(item.cost.hpp)}
+                      {item.cost.status === "incomplete" && (
+                        <span className="block text-caption text-info">
+                          {t("owner.hppIncompleteShort")}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </td>
                 <td className={tdClass}>
                   <ItemStatus

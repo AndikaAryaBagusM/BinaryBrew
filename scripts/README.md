@@ -27,6 +27,11 @@ Run `npm run db:seed` first: the orders use the seeded menu, the "Meja 1" to
 - **Refuses to run twice.** `--replace` deletes the earlier seeded orders and
   their payments first, then makes them again. Imported and real orders are
   never touched.
+- **Costs, not stock.** Each line's `unit_cogs` is the item's HPP from its
+  current recipe and average costs (null without a recipe), for the O-09
+  period table; stock is never deducted. Orders seeded before P2-06 have no
+  `unit_cogs`: run `npm run seed:orders -- --replace` to fill them.
+  `import:orders` fills `unit_cogs` the same way.
 
 ### Parameters
 
