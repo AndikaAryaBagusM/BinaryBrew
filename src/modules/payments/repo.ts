@@ -1,6 +1,7 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type DbExecutor, getDb } from "@/db/client";
-import { paymentEvents, payments, refunds } from "@/db/schema";
+import { orders, paymentEvents, payments, refunds, users } from "@/db/schema";
 
 // SQL only; rules live in service.ts.
 
@@ -29,6 +30,19 @@ export async function selectLatestPayment(
     .orderBy(desc(payments.createdAt))
     .limit(1);
   return row;
+}
+
+// The latest payment of each order (O-12 list).
+export function selectLatestPayments(
+  orderIds: string[],
+  db: DbExecutor = getDb(),
+) {
+  if (orderIds.length === 0) return Promise.resolve([]);
+  return db
+    .selectDistinctOn([payments.orderId], chargeColumns)
+    .from(payments)
+    .where(inArray(payments.orderId, orderIds))
+    .orderBy(payments.orderId, desc(payments.createdAt), desc(payments.id));
 }
 
 export async function selectPaymentById(id: string, db: DbExecutor = getDb()) {
@@ -124,6 +138,101 @@ export async function insertRefund(
   const [row] = await db.insert(refunds).values(values).returning();
   return row!;
 }
+
+// Void (P3-01): the payment the money came in with. The caller holds the
+// order lock (orders before payments).
+export async function lockPaidPayment(orderId: string, db: DbExecutor) {
+  const [row] = await db
+    .select(chargeColumns)
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "paid")))
+    .orderBy(desc(payments.paidAt))
+    .limit(1)
+    .for("update");
+  return row;
+}
+
+export async function lockRefund(id: string, db: DbExecutor) {
+  const [row] = await db
+    .select()
+    .from(refunds)
+    .where(eq(refunds.id, id))
+    .for("update");
+  return row;
+}
+
+export async function markRefundProcessed(
+  id: string,
+  values: { approvedBy: string; gatewayRef: string; now: Date },
+  db: DbExecutor,
+) {
+  await db
+    .update(refunds)
+    .set({
+      status: "processed",
+      approvedBy: values.approvedBy,
+      gatewayRef: values.gatewayRef,
+      processedAt: values.now,
+    })
+    .where(eq(refunds.id, id));
+}
+
+export async function markPaymentRefunded(
+  id: string,
+  now: Date,
+  db: DbExecutor,
+) {
+  await db
+    .update(payments)
+    .set({ status: "refunded", updatedAt: now })
+    .where(eq(payments.id, id));
+}
+
+const requester = alias(users, "requester");
+const approver = alias(users, "approver");
+
+// O-12 refunds with their order and payment, newest first.
+export function selectRefunds(
+  where: SQL | undefined,
+  limit: number,
+  db: DbExecutor = getDb(),
+) {
+  return db
+    .select({
+      id: refunds.id,
+      orderId: refunds.orderId,
+      amount: refunds.amount,
+      reason: refunds.reason,
+      status: refunds.status,
+      gatewayRef: refunds.gatewayRef,
+      createdAt: refunds.createdAt,
+      processedAt: refunds.processedAt,
+      requestedById: refunds.requestedBy,
+      requestedByName: requester.name,
+      approvedByName: approver.name,
+      queueNumber: orders.queueNumber,
+      businessDate: orders.businessDate,
+      orderStatus: orders.status,
+      paymentMethod: payments.method,
+      paymentRef: sql<
+        string | null
+      >`coalesce(${payments.manualReference}, ${payments.providerRef})`,
+    })
+    .from(refunds)
+    .innerJoin(orders, eq(orders.id, refunds.orderId))
+    .innerJoin(payments, eq(payments.id, refunds.paymentId))
+    .leftJoin(requester, eq(requester.id, refunds.requestedBy))
+    .leftJoin(approver, eq(approver.id, refunds.approvedBy))
+    .where(where)
+    .orderBy(desc(refunds.createdAt), desc(refunds.id))
+    .limit(limit);
+}
+
+export const refundWhere = {
+  requested: () => eq(refunds.status, "requested"),
+  processed: () => eq(refunds.status, "processed"),
+  ofOrders: (orderIds: string[]) => inArray(refunds.orderId, orderIds),
+};
 
 // The caller holds the order lock (orders before payments).
 export async function expirePendingPayments(

@@ -9,6 +9,7 @@ import { requireRole, type SessionUser } from "@/modules/auth/service";
 import { logger } from "@/lib/logger";
 import * as repo from "./repo";
 import { compareLow, crossedToLow, type LowStatus, lowStatus } from "./status";
+import { voidMovements } from "./void";
 
 // Ingredients and suppliers (FR-IV-01, O-05). Stock is a ledger: every
 // change to `ingredients.stock_qty` comes with a `stock_movements` row in the
@@ -343,9 +344,16 @@ export async function deductForSale(
   }
   const deductions = rows.map((row) => ({
     ingredientId: row.id,
+    type: "sale_deduction" as const,
     qtyDelta: fromMilli(-input.needs.get(row.id)!),
   }));
-  await repo.insertSaleDeductions(input.orderId, deductions, input.now, db);
+  await repo.insertOrderMovements(
+    input.orderId,
+    deductions,
+    null,
+    input.now,
+    db,
+  );
   const negative = rows
     .filter((row) => toMilli(row.stockQty) - input.needs.get(row.id)! < 0)
     .map((row) => row.id);
@@ -369,6 +377,33 @@ export async function deductForSale(
     .map((row) => row.id);
   if (crossed.length > 0) await repo.notifyStockLow(crossed, db);
   return new Map(rows.map((row) => [row.id, row.avgCost]));
+}
+
+// Void (P3-01, FR-IV-09, BR-08, Schema §5.4 step 4; orders module, inside
+// the void transaction with the order locked): everything the sale took is
+// returned; an order that was being prepared or was ready also logs it as
+// waste (inventory/void.ts). Ingredients lock in id order after the order.
+// Seeded and imported orders never deducted, so nothing moves for them.
+// Returns how many ingredients moved.
+export async function reverseOrderStock(
+  input: { orderId: string; prepared: boolean; userId: string; now: Date },
+  db: DbExecutor,
+): Promise<{ ingredients: number }> {
+  const taken = await repo.selectOrderSaleDeductions(input.orderId, db);
+  if (taken.length === 0) return { ingredients: 0 };
+  await repo.lockIngredientsForUpdate(
+    taken.map((row) => row.ingredientId),
+    db,
+  );
+  const movements = voidMovements(taken, input.prepared);
+  await repo.insertOrderMovements(
+    input.orderId,
+    movements,
+    input.userId,
+    input.now,
+    db,
+  );
+  return { ingredients: taken.length };
 }
 
 // --- Restock (P2-05, FR-IV-05, BR-09; S-09 and O-07) ---

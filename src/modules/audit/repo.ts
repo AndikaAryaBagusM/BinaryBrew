@@ -28,6 +28,7 @@ export async function selectLatestByEntity(
       entityId: auditLogs.entityId,
       action: auditLogs.action,
       actorName: users.name,
+      metadata: auditLogs.metadata,
       createdAt: auditLogs.createdAt,
     })
     .from(auditLogs)

@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type DbExecutor, getDb } from "@/db/client";
 import {
   orderItemModifiers,
@@ -99,11 +100,54 @@ export async function lockOrder(id: string, db: DbExecutor) {
       channel: orders.channel,
       businessDate: orders.businessDate,
       total: orders.total,
+      queueNumber: orders.queueNumber,
     })
     .from(orders)
     .where(eq(orders.id, id))
     .for("update");
   return row;
+}
+
+// Void (P3-01, Schema §5.4 step 3). The caller holds the order lock.
+export async function markOrderVoided(
+  id: string,
+  values: { userId: string; reason: string; now: Date },
+  db: DbExecutor,
+) {
+  await db
+    .update(orders)
+    .set({
+      status: "voided",
+      voidedAt: values.now,
+      voidedBy: values.userId,
+      voidReason: values.reason,
+      updatedAt: values.now,
+    })
+    .where(eq(orders.id, id));
+}
+
+const voider = alias(users, "voider");
+
+// O-12: every order of one business day, newest first.
+export function selectOrdersOfDay(day: string, db: DbExecutor = getDb()) {
+  return db
+    .select({
+      id: orders.id,
+      queueNumber: orders.queueNumber,
+      status: orders.status,
+      channel: orders.channel,
+      table: qrTokens.label,
+      createdByName: users.name,
+      total: orders.total,
+      createdAt: orders.createdAt,
+      paidAt: orders.paidAt,
+    })
+    .from(orders)
+    .leftJoin(qrTokens, eq(qrTokens.id, orders.qrTokenId))
+    .leftJoin(users, eq(users.id, orders.createdBy))
+    .where(eq(orders.businessDate, day))
+    .orderBy(desc(orders.createdAt), desc(orders.id))
+    .limit(1000);
 }
 
 // S-04, S-06: the order with its table label (also of a rotated code) and the
@@ -129,10 +173,14 @@ export async function selectCounterOrder(id: string, db: DbExecutor = getDb()) {
       preparingAt: orders.preparingAt,
       readyAt: orders.readyAt,
       completedAt: orders.completedAt,
+      voidedAt: orders.voidedAt,
+      voidReason: orders.voidReason,
+      voidedByName: voider.name,
     })
     .from(orders)
     .leftJoin(qrTokens, eq(qrTokens.id, orders.qrTokenId))
     .leftJoin(users, eq(users.id, orders.createdBy))
+    .leftJoin(voider, eq(voider.id, orders.voidedBy))
     .where(eq(orders.id, id));
   return row;
 }

@@ -253,7 +253,7 @@ Left navigation, starting with RINGKASAN › Dasbor (on phones, a bottom tab bar
 
 **S-05 Manual payment.** Fields: reference (required), note (optional). Short helper "Cek mutasi di aplikasi bank atau e-wallet sebelum konfirmasi". Primary "Konfirmasi dibayar". Triggers S-07 when required.
 
-**S-06 Order detail.** Items and options, totals, payment info, timestamps, status buttons, "Lihat struk", "Batalkan pesanan" (void; opens reason field then S-07). Destructive button is visually separate and never the largest.
+**S-06 Order detail.** Items and options, totals, payment info, timestamps, status buttons, "Lihat struk", "Batalkan pesanan" (void; opens reason field then S-07). Destructive button is visually separate and never the largest. P3-01 (Figma 16:2468, 16:2637, 16:2792): the void row ("Batalkan pesanan", outlined red, with "Butuh PIN pemilik dan alasan") is at the bottom, for the owner and staff only, while the order is Baru, Disiapkan or Siap. It opens "Batalkan pesanan #012": an amber note on the stock ("Bahan dikembalikan ke stok" before preparation, "Bahan dicatat terbuang" after), a blue note "Refund Rp … dicatat", "Alasan (wajib)" (list) and "Catatan" (required for "Lainnya"), then "Lanjut ke PIN pemilik" (red) opens S-07 with "Batalkan pesanan #012 · refund Rp …". A voided order's S-06 shows who voided it, when, and why.
 
 **S-07 Owner PIN.** Compact PIN dialog: "Masukkan PIN pemilik untuk melanjutkan". Shows what will happen ("Batalkan pesanan #014").
 
@@ -282,7 +282,7 @@ Left navigation, starting with RINGKASAN › Dasbor (on phones, a bottom tab bar
 | O-09 | Figma 20:1649 (P2-06). Header: "Periode" month select (current business month back to the first sale, at most 24) and "Unduh CSV". Three cards: Rata-rata margin ("n menu dengan resep"), Margin rendah ("di bawah batas n%", the O-14 threshold), Resep belum lengkap ("HPP belum akurat"). Table of active items: Menu / Harga / HPP / Margin / Margin % / Catatan, lowest margin first and items without a recipe last. A row below the threshold is tinted `danger-soft` with its margin % in red and a solid red "Margin rendah" chip; a blue "Resep belum lengkap" chip while an ingredient has no cost; a grey "Resep belum ada" chip and "—" without a recipe. Below it, "Penjualan per periode · <bulan>": Menu / Terjual / Pendapatan / HPP / Margin / Margin % from the HPP stored at payment, most sold first, with a Total row; portions without a stored HPP are noted under the name and leave that margin "—". |
 | O-10 | Table and a simple trend per ingredient; highlights the largest variances. |
 | O-11 | Controls for weights and thresholds; promoted items list; performance table (shown, accepted, acceptance %); "Hitung ulang sekarang". |
-| O-12 | Searchable order list; detail with receipt; refund requests with "Tandai sudah dikembalikan". |
+| O-12 | Searchable order list; detail with receipt; refund requests with "Tandai sudah dikembalikan". P3-01 (Figma 22:1930) at `/owner/orders`, nav OPERASIONAL › Pesanan & refund: "Hari bisnis" (today by default) and "Cari" ("Nomor atau ref transaksi"), tabs "Pesanan n" and "Refund" with a red count of open requests. Pesanan: No., Waktu, Saluran, Total, Status (with the refund state); a row opens the order card (S-06 contents, void details, refunds, "Lihat struk"). Refund: open requests from any day, then the latest processed; a row opens the refund card: Jumlah, Alasan, Dibatalkan oleh ("Dimas · disetujui Bagas (PIN)", or the system for a late payment), Waktu, Ref gateway, Stok, the three steps, "Ref refund gateway (wajib)" and "Tandai sudah dikembalikan", which asks for the owner's PIN. The card sits beside the table from 1280 px, below it on narrower screens. |
 | O-13 | User table (name, role, active); reset PIN; devices list with revoke and "Daftarkan perangkat ini". Phase 1 (P1-13): new users are staff or barista (the one owner comes from the seed); PINs are typed twice; the device list is read-only apart from "Daftarkan perangkat ini" (revoke and deactivate come with P3-05). |
 | O-14 | Grouped form: Toko, Pajak dan biaya, Pembayaran, Pesanan, Rekomendasi. One "Simpan perubahan" saves only what changed. Phase 1 (P1-13): the time zone is fixed and "Terima tunai" is shown off and disabled (D11); the recommendation weights and thresholds come with P3-05. |
 | O-15 | Filterable table (date, actor, action); expandable metadata. |
@@ -394,6 +394,7 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `error.orderingClosed` | Pemesanan sedang ditutup. Kamu tetap bisa pesan langsung di kasir. |
 | `error.openOrderLimit` | Kamu masih punya {n} pesanan yang belum dibayar. Bayar atau tunggu sampai kedaluwarsa dulu. |
 | `error.orderStatusChanged` | Status pesanan sudah berubah. Daftar diperbarui. |
+| `error.refundStatusChanged` | Refund ini sudah ditandai selesai. Daftar diperbarui. |
 | `error.nameTaken` | Nama ini sudah dipakai. Pilih nama lain. |
 | `error.unitLocked` | Satuan tidak bisa diubah: bahan ini sudah punya riwayat stok atau dipakai di resep. |
 | `error.priceNegative` | Harga jadi minus untuk: {items}. Naikkan harga menu atau kurangi potongan opsi. |
@@ -507,6 +508,29 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `counter.stepReady` | Siap |
 | `counter.stepCollected` | Diambil |
 | `counter.viewReceipt` | Lihat struk |
+| `counter.void` | Batalkan pesanan |
+| `counter.voidHint` | Butuh PIN pemilik dan alasan |
+| `counter.voidTitle` | Batalkan pesanan {number} |
+| `counter.voidReturnTitle` | Bahan dikembalikan ke stok |
+| `counter.voidReturnBody` | Pesanan belum mulai disiapkan. Kalau sudah dibuat, bahan dicatat sebagai terbuang. |
+| `counter.voidWasteTitle` | Bahan dicatat terbuang |
+| `counter.voidWasteBody` | Pesanan sudah mulai disiapkan, jadi bahannya tidak kembali ke stok. |
+| `counter.voidRefundTitle` | Refund {amount} dicatat |
+| `counter.voidRefundBody` | Uang dikembalikan manual oleh pemilik lewat dashboard gateway, lalu ditandai selesai di Pesanan & refund. |
+| `counter.voidReason` | Alasan (wajib) |
+| `counter.voidReasonChangedMind` | Pelanggan berubah pikiran |
+| `counter.voidReasonWrongOrder` | Pesanan salah input |
+| `counter.voidReasonCannotMake` | Menu tidak bisa dibuat |
+| `counter.voidReasonDoublePayment` | Pembayaran ganda |
+| `counter.voidReasonOther` | Lainnya |
+| `counter.voidNote` | Catatan (opsional) |
+| `counter.voidNoteRequired` | Catatan (wajib untuk Lainnya) |
+| `counter.voidNotePlaceholder` | Contoh: minta batal sebelum dibuat |
+| `counter.voidContinue` | Lanjut ke PIN pemilik |
+| `counter.voidBack` | Kembali |
+| `counter.voidPinFor` | Batalkan pesanan {number} |
+| `counter.voidPinForRefund` | Batalkan pesanan {number} · refund {amount} |
+| `counter.voidedBy` | Dibatalkan oleh {name}, {time} |
 | `counter.openDetail` | Detail pesanan {number} |
 | `counter.availabilityTitle` | Ketersediaan menu |
 | `counter.availabilityHelp` | Tandai habis kalau stok fisik habis atau mesin bermasalah. Menu habis langsung tampil abu-abu dengan label "Habis" di HP pelanggan dan tidak bisa dipesan. |
@@ -735,6 +759,65 @@ Tone: friendly, short, polite but not stiff. Use "kamu" for customers, "Anda" in
 | `owner.hppSalesTotal` | Total |
 | `owner.hppUncostedNote` | {n} porsi tanpa HPP tercatat |
 | `owner.hppSalesCsvTitle` | Penjualan {month} |
+| `owner.navOrders` | Pesanan & refund |
+| `owner.ordersTitle` | Pesanan & refund |
+| `owner.ordersSubtitleToday` | Semua pesanan hari bisnis ini |
+| `owner.ordersSubtitleDay` | Semua pesanan hari bisnis {date} |
+| `owner.ordersDay` | Hari bisnis |
+| `owner.ordersSearch` | Cari |
+| `owner.ordersSearchPlaceholder` | Nomor atau ref transaksi |
+| `owner.ordersTabOrders` | Pesanan |
+| `owner.ordersTabRefunds` | Refund |
+| `owner.ordersColNumber` | No. |
+| `owner.ordersColTime` | Waktu |
+| `owner.ordersColChannel` | Saluran |
+| `owner.ordersColTotal` | Total |
+| `owner.ordersColStatus` | Status |
+| `owner.ordersChannelCounter` | Kasir |
+| `owner.ordersChannelQr` | QR {table} |
+| `owner.ordersOpen` | lihat detail |
+| `owner.ordersEmpty` | Belum ada pesanan di hari ini. |
+| `owner.ordersNoMatch` | Tidak ada pesanan yang cocok. |
+| `owner.orderCardTitle` | Pesanan {number} |
+| `owner.orderCreated` | Dibuat |
+| `owner.orderVoidedBy` | Dibatalkan oleh |
+| `owner.orderRefundLine` | Refund {amount} |
+| `owner.orderSeeRefund` | Lihat refund |
+| `owner.refundOpenCount` | {n} refund menunggu |
+| `owner.refundOpen` | lihat refund |
+| `owner.refundColRequested` | Diminta |
+| `owner.refundColReason` | Alasan |
+| `owner.refundsEmpty` | Belum ada refund. |
+| `owner.refundRequested` | Diminta |
+| `owner.refundDone` | Sudah dikembalikan |
+| `owner.refundTitle` | Refund {number} |
+| `owner.refundAmount` | Jumlah |
+| `owner.refundReason` | Alasan |
+| `owner.refundVoidedBy` | Dibatalkan oleh |
+| `owner.refundVoidedApproved` | {name} · disetujui {owner} (PIN) |
+| `owner.refundVoidedOwnPin` | {name} (PIN pemilik) |
+| `owner.refundBySystem` | Sistem · dibayar setelah kedaluwarsa |
+| `owner.refundLatePayment` | Dibayar setelah waktu habis, menu sudah tidak tersedia |
+| `owner.refundTime` | Waktu |
+| `owner.refundPaymentRef` | Ref gateway |
+| `owner.refundStock` | Stok |
+| `owner.refundStockReturned` | Bahan dikembalikan (belum disiapkan) |
+| `owner.refundStockWasted` | Bahan dicatat terbuang (sudah disiapkan) |
+| `owner.refundStockNone` | Tidak ada perubahan stok |
+| `owner.refundGatewayRef` | Ref refund |
+| `owner.refundProcessedBy` | Ditandai oleh |
+| `owner.refundStepFind` | Buka dashboard gateway, cari transaksi {ref} |
+| `owner.refundStepFindManual` | Cari pembayaran {ref} di aplikasi bank atau e-wallet |
+| `owner.refundStepPay` | Proses refund {amount} ke pelanggan |
+| `owner.refundStepMark` | Isi ref refund dari gateway, lalu tandai sudah dikembalikan |
+| `owner.refundGatewayRefField` | Ref refund gateway (wajib) |
+| `owner.refundGatewayRefHelp` | ID refund dari dashboard gateway |
+| `owner.refundGatewayRefMissing` | Isi ref refund dari gateway dulu. |
+| `owner.refundMark` | Tandai sudah dikembalikan |
+| `owner.refundMarkHint` | Butuh PIN pemilik · tercatat di log audit |
+| `owner.refundPinTitle` | Masukkan PIN Anda untuk melanjutkan |
+| `owner.refundPinFor` | Refund {number} · {amount} sudah dikembalikan |
+| `owner.refundSaved` | Refund {number} ditandai sudah dikembalikan. |
 | `owner.restockEmpty` | Belum ada bahan aktif. Tambahkan dulu di Bahan & stok. |
 | `owner.saveRecipe` | Simpan resep |
 | `owner.recipeSaved` | Resep tersimpan. |

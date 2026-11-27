@@ -3,10 +3,11 @@ import { getEnv } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { randomToken } from "@/lib/ids";
 import { logger } from "@/lib/logger";
-import { audit } from "@/modules/audit/service";
+import { audit, latestAuditByEntity } from "@/modules/audit/service";
 import {
   COUNTER_ROLES,
   consumeElevation,
+  getUserNames,
   requireRole,
   type SessionUser,
 } from "@/modules/auth/service";
@@ -374,9 +375,158 @@ export async function confirmManualPayment(
   };
 }
 
+// --- Refunds (P3-01, FR-PM-08, Schema §5.4 steps 5-6) ---
+
+// Void (orders module, inside the void transaction with the order locked):
+// asks for the paid amount back. Null when no money came in (a paid order
+// always has a payment; a zero total has nothing to return).
+export async function requestVoidRefund(
+  input: { orderId: string; userId: string; reason: string },
+  db: DbExecutor,
+): Promise<{ id: string; amount: number; paymentId: string } | null> {
+  const payment = await repo.lockPaidPayment(input.orderId, db);
+  if (!payment || payment.amount <= 0) return null;
+  const refund = await repo.insertRefund(
+    {
+      orderId: input.orderId,
+      paymentId: payment.id,
+      amount: payment.amount,
+      reason: input.reason,
+      requestedBy: input.userId,
+    },
+    db,
+  );
+  return { id: refund.id, amount: refund.amount, paymentId: payment.id };
+}
+
+export type RefundSummary = {
+  id: string;
+  orderId: string;
+  queueNumber: number | null;
+  businessDate: string;
+  amount: number;
+  reason: string;
+  status: "requested" | "processed";
+  createdAt: Date;
+  processedAt: Date | null;
+  gatewayRef: string | null;
+  paymentMethod: "qris_dynamic" | "qris_static_manual" | "cash";
+  paymentRef: string | null;
+  // late_payment: asked for by the system (Schema §5.2), requestedByName null.
+  source: "void" | "late_payment";
+  requestedByName: string | null;
+  // The owner whose PIN allowed the void, and what happened to the stock.
+  approvedVoidBy: string | null;
+  stock: "returned" | "wasted" | "none";
+  processedByName: string | null;
+};
+
+const PROCESSED_SHOWN = 50;
+
+// O-12 "Refund": every open request, then the latest processed ones.
+export async function listRefunds(
+  actor: SessionUser | null,
+): Promise<RefundSummary[]> {
+  requireRole(actor, ["owner"]);
+  const [open, done] = await Promise.all([
+    repo.selectRefunds(repo.refundWhere.requested(), 500),
+    repo.selectRefunds(repo.refundWhere.processed(), PROCESSED_SHOWN),
+  ]);
+  return describeRefunds([...open, ...done]);
+}
+
+// O-12 order detail: the refunds of these orders.
+export async function getOrderRefunds(
+  orderIds: string[],
+): Promise<RefundSummary[]> {
+  if (orderIds.length === 0) return [];
+  return describeRefunds(
+    await repo.selectRefunds(repo.refundWhere.ofOrders(orderIds), 500),
+  );
+}
+
+async function describeRefunds(
+  rows: Awaited<ReturnType<typeof repo.selectRefunds>>,
+): Promise<RefundSummary[]> {
+  const voids = await latestAuditByEntity(
+    "order",
+    rows.map((row) => row.orderId),
+    ["order.void"],
+  );
+  const owners = await getUserNames(
+    [...voids.values()].map((entry) => String(entry.metadata.ownerUserId)),
+  );
+  return rows.map(({ requestedById, approvedByName, ...row }) => {
+    const entry = voids.get(row.orderId);
+    const stock = entry?.metadata.stock;
+    return {
+      ...row,
+      source: requestedById === null ? "late_payment" : "void",
+      approvedVoidBy: entry
+        ? (owners.get(String(entry.metadata.ownerUserId)) ?? null)
+        : null,
+      stock: stock === "returned" || stock === "wasted" ? stock : "none",
+      processedByName: approvedByName,
+    };
+  });
+}
+
+// O-12 "Tandai sudah dikembalikan" (Schema §5.4 step 6): the owner refunded
+// the money in the gateway dashboard (or by bank transfer for a static-QR
+// payment) and records the gateway's refund id. Owner only, with the owner's
+// own PIN (scope refund_processed); the payment becomes refunded.
+export async function markRefundProcessed(
+  actor: SessionUser | null,
+  input: { refundId: string; gatewayRef: string; elevationId: string },
+  { now = new Date() }: { now?: Date } = {},
+): Promise<{ status: "processed" }> {
+  const owner = requireRole(actor, ["owner"]);
+  if (!UUID.test(input.refundId)) throw new AppError("NOT_FOUND");
+  await getDb().transaction(async (tx) => {
+    const refund = await repo.lockRefund(input.refundId, tx);
+    if (!refund) throw new AppError("NOT_FOUND");
+    if (refund.status !== "requested") {
+      throw new AppError("REFUND_STATUS_CHANGED");
+    }
+    const elevation = await consumeElevation(
+      owner,
+      { elevationId: input.elevationId, scope: "refund_processed" },
+      { now, db: tx },
+    );
+    await repo.markRefundProcessed(
+      refund.id,
+      { approvedBy: owner.userId, gatewayRef: input.gatewayRef, now },
+      tx,
+    );
+    await repo.markPaymentRefunded(refund.paymentId, now, tx);
+    await audit(
+      {
+        action: "refund.process",
+        actor: owner,
+        entity: { type: "refund", id: refund.id },
+        metadata: {
+          orderId: refund.orderId,
+          paymentId: refund.paymentId,
+          amount: refund.amount,
+          gatewayRef: input.gatewayRef,
+          elevationId: elevation.elevationId,
+        },
+      },
+      { db: tx, now },
+    );
+  });
+  return { status: "processed" };
+}
+
 // The order's latest payment, for the status screens.
 export function getOrderPayment(orderId: string) {
   return repo.selectLatestPayment(orderId);
+}
+
+// The latest payment of each order, by order id (O-12 list).
+export async function getLatestPayments(orderIds: string[]) {
+  const rows = await repo.selectLatestPayments(orderIds);
+  return new Map(rows.map((row) => [row.orderId, row]));
 }
 
 // Demo order history (FR-RC-07): the paid QRIS payment of each seeded order.

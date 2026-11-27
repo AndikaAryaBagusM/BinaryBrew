@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, max, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { type DbExecutor, getDb } from "@/db/client";
 import { devices, elevations, sessions, users } from "@/db/schema";
@@ -8,6 +8,14 @@ import { devices, elevations, sessions, users } from "@/db/schema";
 export async function findUserById(id: string, db: DbExecutor = getDb()) {
   const [user] = await db.select().from(users).where(eq(users.id, id));
   return user;
+}
+
+export function selectUserNames(ids: string[], db: DbExecutor = getDb()) {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(inArray(users.id, ids));
 }
 
 export async function findOwnerByEmail(

@@ -10,6 +10,7 @@ import {
   Menu,
   PackagePlus,
   Percent,
+  Receipt,
   Settings,
   SlidersHorizontal,
   Users,
@@ -95,6 +96,7 @@ const sections: {
     tab: "owner.navMore",
     icon: Menu,
     links: [
+      { href: "/owner/orders", label: "owner.navOrders", icon: Receipt },
       { href: "/owner/users", label: "owner.navUsers", icon: Users },
       { href: "/owner/settings", label: "owner.navSettings", icon: Settings },
     ],
