@@ -145,6 +145,60 @@ export async function selectOrderMenuItemIds(orderId: string, db: DbExecutor) {
   return rows.map((row) => row.menuItemId);
 }
 
+// Stock deduction at payment (P2-04): each line with the ingredient deltas
+// its options had when the order was placed (order_item_modifiers snapshot).
+export async function selectOrderLinesForStock(
+  orderId: string,
+  db: DbExecutor,
+) {
+  const lines = await db
+    .select({
+      id: orderItems.id,
+      menuItemId: orderItems.menuItemId,
+      quantity: orderItems.quantity,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+    .orderBy(asc(orderItems.position));
+  const modifiers =
+    lines.length === 0
+      ? []
+      : await db
+          .select({
+            orderItemId: orderItemModifiers.orderItemId,
+            ingredientDeltas: orderItemModifiers.ingredientDeltas,
+          })
+          .from(orderItemModifiers)
+          .where(
+            inArray(
+              orderItemModifiers.orderItemId,
+              lines.map((line) => line.id),
+            ),
+          );
+  return lines.map((line) => ({
+    ...line,
+    deltas: modifiers
+      .filter((row) => row.orderItemId === line.id)
+      .flatMap(
+        (row) =>
+          row.ingredientDeltas as { ingredientId: string; qtyDelta: string }[],
+      ),
+  }));
+}
+
+export async function setUnitCogs(
+  lines: { id: string; unitCogs: number | null }[],
+  db: DbExecutor,
+) {
+  for (const line of lines) {
+    if (line.unitCogs === null) continue;
+    await db
+      .update(orderItems)
+      .set({ unitCogs: line.unitCogs })
+      .where(eq(orderItems.id, line.id));
+  }
+}
+
 // next_queue_number() locks the day's counter row until commit, so parallel
 // payments get unique, gapless numbers (BR-04).
 export async function markOrderPaid(

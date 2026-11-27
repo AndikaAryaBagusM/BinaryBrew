@@ -14,6 +14,7 @@ import {
 import {
   getItemCatalog,
   getOrderableItems,
+  getRecipes,
   listActiveQrCodes,
   requireOrderingQr,
 } from "@/modules/menu/service";
@@ -26,13 +27,19 @@ import {
   type PaymentSummary,
   recordSeedPayments,
 } from "@/modules/payments/service";
-import { getStockLevels } from "@/modules/inventory/service";
+import { recipeCost } from "@/lib/money";
+import { deductForSale, getStockLevels } from "@/modules/inventory/service";
 import { linkSuggestionEvents } from "@/modules/recommendations/service";
 import { getSettings } from "@/modules/settings/service";
 import { type CsvProblem, readOrderCsv } from "./order-csv";
 import { type CartLine, priceOrder } from "./pricing";
 import * as repo from "./repo";
-import { orderStockNeeds, stockShortfalls } from "./stock";
+import {
+  orderStockNeeds,
+  scaleNeeds,
+  stockShortfalls,
+  unitStockNeeds,
+} from "./stock";
 import {
   generateSeedOrders,
   ITEM_POPULARITY,
@@ -333,8 +340,10 @@ export async function orderItemsStillAvailable(
   return items.length === ids.length && items.every((i) => i.isAvailable);
 }
 
-// Marks the order paid with the next queue number of its business day.
-// order.paid is emitted when the transaction commits.
+// Marks the order paid with the next queue number of its business day, and
+// takes its ingredients out of stock in the same transaction (Schema §5.2
+// steps 5-6). Every paid path comes here: webhook, late-payment revival and
+// manual confirmation. order.paid is emitted when the transaction commits.
 export async function markOrderPaid(
   order: LockedOrder,
   now: Date,
@@ -346,11 +355,54 @@ export async function markOrderPaid(
     now,
     db,
   );
+  await deductOrderStock(order.id, now, db);
   await repo.notifyOrderEvents(
     { orderId: order.id, status: "paid", queueNumber },
     db,
   );
   return queueNumber;
+}
+
+// FR-IV-03, FR-HP-03, BR-05. Each line needs the item's current recipe plus
+// the option deltas snapshotted with the order, never below zero per
+// ingredient (orders/stock.ts, the checkout rule), times its quantity. The
+// whole order is deducted at once (one movement per ingredient); stock may go
+// negative. unit_cogs is the per-unit need at the current average costs,
+// rounded once; null for an item without a recipe (HPP unknown, not zero).
+async function deductOrderStock(orderId: string, now: Date, db: DbExecutor) {
+  const lines = await repo.selectOrderLinesForStock(orderId, db);
+  const recipes = await getRecipes(
+    lines.map((line) => line.menuItemId),
+    db,
+  );
+  const perLine = lines.map((line) => ({
+    line,
+    unit: unitStockNeeds(recipes.get(line.menuItemId) ?? [], line.deltas),
+  }));
+  const needs = new Map<string, number>();
+  for (const { line, unit } of perLine) {
+    for (const [id, milli] of scaleNeeds(unit, line.quantity)) {
+      needs.set(id, (needs.get(id) ?? 0) + milli);
+    }
+  }
+  const costs =
+    needs.size > 0
+      ? await deductForSale({ orderId, needs, now }, db)
+      : new Map<string, string>();
+  await repo.setUnitCogs(
+    perLine.map(({ line, unit }) => ({
+      id: line.id,
+      unitCogs: recipes.has(line.menuItemId)
+        ? recipeCost(
+            [...unit].map(([id, quantityMilli]) => ({
+              quantityMilli,
+              avgCost: costs.get(id) ?? "0",
+            })),
+          )
+        : null,
+    })),
+    db,
+  );
 }
 
 // Customer status link (C-05, C-06, C-07). The public token is the only key;

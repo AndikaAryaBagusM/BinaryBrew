@@ -37,12 +37,14 @@ test("lists the seeded ingredients with stock, cost and status", async ({
   page,
 }) => {
   await openIngredients(page);
-  const beans = row(page, "Biji kopi arabika");
-  await expect(beans).toContainText("3.250");
-  await expect(beans).toContainText("Rp 285,00");
-  await expect(beans.getByText("Aman")).toBeVisible();
-  // Seeded below its minimum (1.800 of 2.000 ml).
-  await expect(row(page, "Susu UHT").getByText("Menipis")).toBeVisible();
+  // Paid orders of earlier specs deduct stock (P2-04), so this looks at
+  // ingredients no spec sells (global-setup.ts): Matcha bubuk as seeded
+  // (500 g for Rp 450.000), Es krim vanila left at 50 of 500 g.
+  const matcha = row(page, "Matcha bubuk");
+  await expect(matcha).toContainText("500");
+  await expect(matcha).toContainText("Rp 900,00");
+  await expect(matcha.getByText("Aman")).toBeVisible();
+  await expect(row(page, "Es krim vanila").getByText("Menipis")).toBeVisible();
   await expect(
     page.getByRole("list", { name: "Ringkasan stok" }).getByText(/menipis/),
   ).toBeVisible();

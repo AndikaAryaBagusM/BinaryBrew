@@ -17,7 +17,7 @@ export type StockItem = {
   modifierGroups: readonly {
     options: readonly {
       id: string;
-      ingredientDeltas: readonly { ingredientId: string; qtyDelta: string }[];
+      ingredientDeltas: readonly IngredientDelta[];
     }[];
   }[];
 };
@@ -28,29 +28,45 @@ export type StockLine = {
   modifierOptionIds: readonly string[];
 };
 
+export type IngredientDelta = { ingredientId: string; qtyDelta: string };
+
+// What one unit of a line needs: the recipe plus the given option deltas,
+// only the ingredients it needs more than zero of. Checkout passes the deltas
+// of the chosen options; payment passes the order snapshot (P2-04).
+export function unitStockNeeds(
+  recipe: StockItem["recipe"],
+  deltas: readonly IngredientDelta[],
+): Map<string, number> {
+  const perUnit = new Map<string, number>();
+  const add = (ingredientId: string, milli: number) =>
+    perUnit.set(ingredientId, (perUnit.get(ingredientId) ?? 0) + milli);
+  for (const row of recipe) add(row.ingredientId, toMilli(row.qty));
+  for (const delta of deltas) add(delta.ingredientId, toMilli(delta.qtyDelta));
+  for (const [ingredientId, milli] of perUnit) {
+    if (milli <= 0) perUnit.delete(ingredientId);
+  }
+  return perUnit;
+}
+
 // The positive need of one line, all its units together.
 export function lineStockNeeds(
   line: StockLine,
   item: StockItem,
 ): Map<string, number> {
-  const perUnit = new Map<string, number>();
-  const add = (ingredientId: string, milli: number) =>
-    perUnit.set(ingredientId, (perUnit.get(ingredientId) ?? 0) + milli);
-  for (const row of item.recipe) add(row.ingredientId, toMilli(row.qty));
   const chosen = new Set(line.modifierOptionIds);
-  for (const group of item.modifierGroups) {
-    for (const option of group.options) {
-      if (!chosen.has(option.id)) continue;
-      for (const delta of option.ingredientDeltas) {
-        add(delta.ingredientId, toMilli(delta.qtyDelta));
-      }
-    }
-  }
-  const needs = new Map<string, number>();
-  for (const [ingredientId, milli] of perUnit) {
-    if (milli > 0) needs.set(ingredientId, milli * line.quantity);
-  }
-  return needs;
+  const deltas = item.modifierGroups.flatMap((group) =>
+    group.options
+      .filter((option) => chosen.has(option.id))
+      .flatMap((option) => option.ingredientDeltas),
+  );
+  return scaleNeeds(unitStockNeeds(item.recipe, deltas), line.quantity);
+}
+
+export function scaleNeeds(
+  needs: ReadonlyMap<string, number>,
+  quantity: number,
+): Map<string, number> {
+  return new Map([...needs].map(([id, milli]) => [id, milli * quantity]));
 }
 
 // The whole order's need per ingredient. Lines whose item is unknown are

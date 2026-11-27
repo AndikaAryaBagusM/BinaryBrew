@@ -154,8 +154,9 @@ the queue board. `.env` must have `PAYMENT_PROVIDER=mock` and `SEED_COUNTER_DEVI
 
 Checks behind the Phase 1 exit criteria: `npm run verify`, `npm run test:e2e` (includes axe on
 every customer screen), `npm run perf:menu` against `npm run build && npm run start`, and
-`npm run load:test` against a running app. The load test creates real paid orders: run it
-before the reset, or point the app and the script at another database with `DATABASE_URL`.
+`npm run load:test` against a running app. The load test creates real paid orders, and since
+P2-04 each payment deducts stock, so seeded items sell out as it runs: run it before the reset, or
+point the app and the script at another database with `DATABASE_URL`.
 
 ## Testing on a phone
 
